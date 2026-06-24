@@ -287,8 +287,6 @@ func SoftDeleteProduct(ctx context.Context, id uuid.UUID) error {
 
 // ─── Transaction ───
 
-type txQueries struct{}
-
 func CreateTransaction(ctx context.Context, txData *model.Transaction) error {
 	return database.Pool.QueryRow(ctx,
 		`INSERT INTO transactions (branch_id, user_id, customer_name, subtotal,
@@ -403,4 +401,309 @@ func GetTransactionByID(ctx context.Context, id uuid.UUID) (*model.Transaction, 
 		tx.Items = append(tx.Items, item)
 	}
 	return tx, nil
+}
+
+// ─── Branch Products ───
+
+func UpsertBranchProduct(ctx context.Context, branchID, productID uuid.UUID, qty float64) error {
+	_, err := database.Pool.Exec(ctx,
+		`INSERT INTO branch_products (branch_id, product_id, stock_qty)
+		 VALUES ($1, $2, $3)
+		 ON CONFLICT (branch_id, product_id)
+		 DO UPDATE SET stock_qty = branch_products.stock_qty + $3, updated_at = NOW()`,
+		branchID, productID, qty)
+	return err
+}
+
+func SetBranchProductStock(ctx context.Context, branchID, productID uuid.UUID, qty float64) error {
+	_, err := database.Pool.Exec(ctx,
+		`INSERT INTO branch_products (branch_id, product_id, stock_qty)
+		 VALUES ($1, $2, $3)
+		 ON CONFLICT (branch_id, product_id)
+		 DO UPDATE SET stock_qty = $3, updated_at = NOW()`,
+		branchID, productID, qty)
+	return err
+}
+
+func GetBranchProduct(ctx context.Context, branchID, productID uuid.UUID) (*model.BranchProduct, error) {
+	bp := &model.BranchProduct{}
+	err := database.Pool.QueryRow(ctx,
+		`SELECT bp.branch_id, bp.product_id, bp.stock_qty, bp.created_at, bp.updated_at,
+		        p.name, p.barcode, p.price, COALESCE(c.name, '') as category_name
+		 FROM branch_products bp
+		 JOIN products p ON p.id = bp.product_id
+		 LEFT JOIN categories c ON c.id = p.category_id
+		 WHERE bp.branch_id = $1 AND bp.product_id = $2`,
+		branchID, productID,
+	).Scan(&bp.BranchID, &bp.ProductID, &bp.StockQty, &bp.CreatedAt, &bp.UpdatedAt,
+		&bp.ProductName, &bp.Barcode, &bp.Price, &bp.CategoryName)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return bp, nil
+}
+
+func ListBranchProducts(ctx context.Context, branchID uuid.UUID) ([]model.BranchProduct, error) {
+	rows, err := database.Pool.Query(ctx,
+		`SELECT bp.branch_id, bp.product_id, bp.stock_qty, bp.created_at, bp.updated_at,
+		        p.name, p.barcode, p.price, COALESCE(c.name, '') as category_name
+		 FROM branch_products bp
+		 JOIN products p ON p.id = bp.product_id
+		 LEFT JOIN categories c ON c.id = p.category_id
+		 WHERE bp.branch_id = $1
+		 ORDER BY p.name`,
+		branchID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []model.BranchProduct
+	for rows.Next() {
+		var bp model.BranchProduct
+		if err := rows.Scan(&bp.BranchID, &bp.ProductID, &bp.StockQty, &bp.CreatedAt, &bp.UpdatedAt,
+			&bp.ProductName, &bp.Barcode, &bp.Price, &bp.CategoryName); err != nil {
+			return nil, err
+		}
+		items = append(items, bp)
+	}
+	return items, nil
+}
+
+// ─── Stock Mutations ───
+
+func InsertStockMutation(ctx context.Context, m *model.StockMutation) error {
+	return database.Pool.QueryRow(ctx,
+		`INSERT INTO stock_mutations (branch_id, product_id, type, qty, reference_id, notes)
+		 VALUES ($1,$2,$3,$4,$5,$6)
+		 RETURNING id, created_at`,
+		m.BranchID, m.ProductID, m.Type, m.Qty, m.ReferenceID, m.Notes,
+	).Scan(&m.ID, &m.CreatedAt)
+}
+
+func ListStockMutations(ctx context.Context, branchID uuid.UUID, limit, offset int) ([]model.StockMutation, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	rows, err := database.Pool.Query(ctx,
+		`SELECT sm.id, sm.branch_id, sm.product_id, sm.type, sm.qty,
+		        sm.reference_id, sm.notes, sm.created_at,
+		        p.name, p.barcode
+		 FROM stock_mutations sm
+		 JOIN products p ON p.id = sm.product_id
+		 WHERE sm.branch_id = $1
+		 ORDER BY sm.created_at DESC
+		 LIMIT $2 OFFSET $3`,
+		branchID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []model.StockMutation
+	for rows.Next() {
+		var m model.StockMutation
+		if err := rows.Scan(&m.ID, &m.BranchID, &m.ProductID, &m.Type, &m.Qty,
+			&m.ReferenceID, &m.Notes, &m.CreatedAt, &m.ProductName, &m.Barcode); err != nil {
+			return nil, err
+		}
+		items = append(items, m)
+	}
+	return items, nil
+}
+
+// ─── Stock Transfer (atomic with DB txn) ───
+
+func TransferStock(ctx context.Context, sourceBranchID, targetBranchID, productID uuid.UUID, qty float64, notes string) error {
+	tx, err := database.Pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Decrease source branch stock
+	tag, err := tx.Exec(ctx,
+		`UPDATE branch_products SET stock_qty = stock_qty - $1, updated_at = NOW()
+		 WHERE branch_id = $2 AND product_id = $3 AND stock_qty >= $1`,
+		qty, sourceBranchID, productID)
+	if err != nil {
+		return fmt.Errorf("decrease source: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return errors.New("insufficient stock in source branch or product not found")
+	}
+
+	// Increase target branch stock
+	_, err = tx.Exec(ctx,
+		`INSERT INTO branch_products (branch_id, product_id, stock_qty)
+		 VALUES ($1, $2, $3)
+		 ON CONFLICT (branch_id, product_id)
+		 DO UPDATE SET stock_qty = branch_products.stock_qty + $3, updated_at = NOW()`,
+		targetBranchID, productID, qty)
+	if err != nil {
+		return fmt.Errorf("increase target: %w", err)
+	}
+
+	// Insert transfer_out mutation for source
+	_, err = tx.Exec(ctx,
+		`INSERT INTO stock_mutations (branch_id, product_id, type, qty, notes)
+		 VALUES ($1, $2, 'transfer_out', $3, $4)`,
+		sourceBranchID, productID, qty, notes)
+	if err != nil {
+		return fmt.Errorf("source mutation: %w", err)
+	}
+
+	// Insert transfer_in mutation for target
+	_, err = tx.Exec(ctx,
+		`INSERT INTO stock_mutations (branch_id, product_id, type, qty, notes)
+		 VALUES ($1, $2, 'transfer_in', $3, $4)`,
+		targetBranchID, productID, qty, notes)
+	if err != nil {
+		return fmt.Errorf("target mutation: %w", err)
+	}
+
+	return tx.Commit(ctx)
+}
+
+// ─── Reports ───
+
+func GetSalesReport(ctx context.Context, branchID uuid.UUID, start, end time.Time) ([]model.SalesReportRow, float64, float64, float64, int, error) {
+	rows, err := database.Pool.Query(ctx,
+		`SELECT DATE(created_at)::TEXT as day,
+		        COUNT(*)::INT as tx_count,
+		        COALESCE(SUM(subtotal), 0) as total_subtotal,
+		        COALESCE(SUM(discount_amount), 0) as total_discount,
+		        COALESCE(SUM(total), 0) as total_net
+		 FROM transactions
+		 WHERE branch_id = $1 AND created_at >= $2 AND created_at < $3
+		 GROUP BY DATE(created_at)
+		 ORDER BY day`,
+		branchID, start, end)
+	if err != nil {
+		return nil, 0, 0, 0, 0, err
+	}
+	defer rows.Close()
+
+	var report []model.SalesReportRow
+	var totalSales, totalDiscount, totalNet float64
+	var totalTx int
+
+	for rows.Next() {
+		var r model.SalesReportRow
+		if err := rows.Scan(&r.Date, &r.TransactionCount, &r.Subtotal, &r.Discount, &r.Total); err != nil {
+			return nil, 0, 0, 0, 0, err
+		}
+		report = append(report, r)
+		totalSales += r.Subtotal
+		totalDiscount += r.Discount
+		totalNet += r.Total
+		totalTx += r.TransactionCount
+	}
+	return report, totalSales, totalDiscount, totalNet, totalTx, nil
+}
+
+func GetStockReport(ctx context.Context, branchID uuid.UUID) ([]model.StockReportRow, error) {
+	rows, err := database.Pool.Query(ctx,
+		`SELECT bp.product_id, p.name, p.barcode,
+		        COALESCE(c.name, '') as category_name,
+		        bp.stock_qty,
+		        (SELECT MAX(sm.created_at) FROM stock_mutations sm WHERE sm.branch_id = bp.branch_id AND sm.product_id = bp.product_id) as last_mutation
+		 FROM branch_products bp
+		 JOIN products p ON p.id = bp.product_id
+		 LEFT JOIN categories c ON c.id = p.category_id
+		 WHERE bp.branch_id = $1
+		 ORDER BY p.name`,
+		branchID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []model.StockReportRow
+	for rows.Next() {
+		var r model.StockReportRow
+		if err := rows.Scan(&r.ProductID, &r.ProductName, &r.Barcode,
+			&r.CategoryName, &r.CurrentStock, &r.LastMutation); err != nil {
+			return nil, err
+		}
+		items = append(items, r)
+	}
+	return items, nil
+}
+
+func GetProfitLossReport(ctx context.Context, branchID uuid.UUID, start, end time.Time) ([]model.ProfitLossRow, model.ProfitLossSummary, error) {
+	rows, err := database.Pool.Query(ctx,
+		`SELECT ti.product_id, p.name,
+		        SUM(ti.quantity)::INT as qty_sold,
+		        COALESCE(SUM(ti.subtotal), 0) as revenue,
+		        COALESCE(SUM(ti.quantity * p.price * 0.7), 0) as cost,
+		        COALESCE(SUM(ti.subtotal - ti.quantity * p.price * 0.7), 0) as profit
+		 FROM transaction_items ti
+		 JOIN transactions t ON t.id = ti.transaction_id
+		 JOIN products p ON p.id = ti.product_id
+		 WHERE t.branch_id = $1 AND t.created_at >= $2 AND t.created_at < $3
+		 GROUP BY ti.product_id, p.name
+		 ORDER BY profit DESC`,
+		branchID, start, end)
+	if err != nil {
+		return nil, model.ProfitLossSummary{}, err
+	}
+	defer rows.Close()
+
+	var items []model.ProfitLossRow
+	var summary model.ProfitLossSummary
+
+	for rows.Next() {
+		var r model.ProfitLossRow
+		if err := rows.Scan(&r.ProductID, &r.ProductName, &r.QtySold, &r.Revenue, &r.Cost, &r.Profit); err != nil {
+			return nil, model.ProfitLossSummary{}, err
+		}
+		items = append(items, r)
+		summary.TotalRevenue += r.Revenue
+		summary.TotalCost += r.Cost
+		summary.TotalProfit += r.Profit
+	}
+	return items, summary, nil
+}
+
+// ─── Export ───
+
+type SalesExportRow struct {
+	Date        string  `json:"date"`
+	CustomerName string `json:"customer_name"`
+	Items       string  `json:"items"`
+	Subtotal    float64 `json:"subtotal"`
+	Discount    float64 `json:"discount"`
+	Total       float64 `json:"total"`
+	Cash        float64 `json:"cash"`
+	Change      float64 `json:"change"`
+}
+
+func GetSalesExportData(ctx context.Context, branchID uuid.UUID, start, end time.Time) ([]SalesExportRow, error) {
+	rows, err := database.Pool.Query(ctx,
+		`SELECT t.created_at::TEXT, t.customer_name,
+		        (SELECT STRING_AGG(ti.product_name || ' x' || ti.quantity::TEXT, ', ')
+		         FROM transaction_items ti WHERE ti.transaction_id = t.id) as items,
+		        t.subtotal, t.discount_amount, t.total, t.cash_amount, t.change_amount
+		 FROM transactions t
+		 WHERE t.branch_id = $1 AND t.created_at >= $2 AND t.created_at < $3
+		 ORDER BY t.created_at DESC`,
+		branchID, start, end)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var data []SalesExportRow
+	for rows.Next() {
+		var r SalesExportRow
+		if err := rows.Scan(&r.Date, &r.CustomerName, &r.Items, &r.Subtotal, &r.Discount, &r.Total, &r.Cash, &r.Change); err != nil {
+			return nil, err
+		}
+		data = append(data, r)
+	}
+	return data, nil
 }

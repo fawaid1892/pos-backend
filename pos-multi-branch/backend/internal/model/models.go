@@ -139,3 +139,120 @@ type CheckoutItemReq struct {
 	ProductID uuid.UUID `json:"product_id"`
 	Quantity  int       `json:"quantity"`
 }
+
+// ─── Stock ───
+
+type BranchProduct struct {
+	BranchID  uuid.UUID `json:"branch_id"`
+	ProductID uuid.UUID `json:"product_id"`
+	StockQty  float64   `json:"stock_qty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+
+	// Joined fields
+	ProductName string `json:"product_name,omitempty"`
+	Barcode     string `json:"barcode,omitempty"`
+	Price       float64 `json:"price,omitempty"`
+	CategoryName string `json:"category_name,omitempty"`
+}
+
+type StockMutation struct {
+	ID          uuid.UUID  `json:"id"`
+	BranchID    uuid.UUID  `json:"branch_id"`
+	ProductID   uuid.UUID  `json:"product_id"`
+	Type        string     `json:"type"` // in, out, transfer_in, transfer_out
+	Qty         float64    `json:"qty"`
+	ReferenceID *uuid.UUID `json:"reference_id,omitempty"`
+	Notes       string     `json:"notes,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+
+	// Joined fields
+	ProductName string `json:"product_name,omitempty"`
+	Barcode     string `json:"barcode,omitempty"`
+}
+
+type StockAdjustmentRequest struct {
+	ProductID uuid.UUID `json:"product_id"`
+	Type      string    `json:"type"` // in, out
+	Qty       float64   `json:"qty"`
+	Notes     string    `json:"notes,omitempty"`
+}
+
+type StockTransferRequest struct {
+	ProductID    uuid.UUID `json:"product_id"`
+	SourceBranchID uuid.UUID `json:"source_branch_id"`
+	TargetBranchID uuid.UUID `json:"target_branch_id"`
+	Qty         float64   `json:"qty"`
+	Notes       string    `json:"notes,omitempty"`
+}
+
+// ─── Reports ───
+
+type SalesReportRow struct {
+	Date        string  `json:"date"`
+	TransactionCount int `json:"transaction_count"`
+	Subtotal    float64 `json:"subtotal"`
+	Discount    float64 `json:"discount"`
+	Total       float64 `json:"total"`
+}
+
+type StockReportRow struct {
+	ProductID     uuid.UUID `json:"product_id"`
+	ProductName   string    `json:"product_name"`
+	Barcode       string    `json:"barcode"`
+	CategoryName  string    `json:"category_name"`
+	CurrentStock  float64   `json:"current_stock"`
+	MinStock      float64   `json:"min_stock,omitempty"`
+	LastMutation  *time.Time `json:"last_mutation,omitempty"`
+}
+
+type ProfitLossRow struct {
+	ProductID   uuid.UUID  `json:"product_id"`
+	ProductName string     `json:"product_name"`
+	QtySold     int        `json:"qty_sold"`
+	Revenue     float64    `json:"revenue"`
+	Cost        float64    `json:"cost"`
+	Profit      float64    `json:"profit"`
+}
+
+type ProfitLossSummary struct {
+	TotalRevenue float64 `json:"total_revenue"`
+	TotalCost    float64 `json:"total_cost"`
+	TotalProfit  float64 `json:"total_profit"`
+}
+
+type SalesReportResponse struct {
+	Period struct {
+		Start string `json:"start"`
+		End   string `json:"end"`
+	} `json:"period"`
+	Rows       []SalesReportRow `json:"rows"`
+	TotalSales float64          `json:"total_sales"`
+	TotalDiscount float64      `json:"total_discount"`
+	TotalNet   float64          `json:"total_net"`
+	TotalTransactions int       `json:"total_transactions"`
+}
+
+type StockReportResponse struct {
+	Rows       []StockReportRow `json:"rows"`
+	TotalItems int              `json:"total_items"`
+}
+
+type ProfitLossReportResponse struct {
+	Period struct {
+		Start string `json:"start"`
+		End   string `json:"end"`
+	} `json:"period"`
+	Rows    []ProfitLossRow  `json:"rows"`
+	Summary ProfitLossSummary `json:"summary"`
+}
+
+// ─── Export ───
+
+type ExportFormat string
+
+const (
+	ExportFormatPDF  ExportFormat = "pdf"
+	ExportFormatXLSX ExportFormat = "xlsx"
+	ExportFormatCSV  ExportFormat = "csv"
+)

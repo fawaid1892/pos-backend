@@ -27,6 +27,9 @@ func main() {
 	branchH := handler.NewBranchHandler()
 	productH := handler.NewProductHandler()
 	txH := handler.NewTransactionHandler()
+	stockH := handler.NewStockHandler()
+	reportH := handler.NewReportHandler()
+	exportH := handler.NewExportHandler()
 
 	mux := http.NewServeMux()
 
@@ -62,6 +65,19 @@ func main() {
 	protected.HandleFunc("GET /api/v1/transactions", txH.List)
 	protected.HandleFunc("GET /api/v1/transactions/{id}", txH.GetByID)
 	protected.HandleFunc("POST /api/v1/transactions/checkout", txH.Checkout)
+
+	// Stock / Inventory
+	protected.HandleFunc("POST /api/v1/branches/{id}/inventory/adjustment", stockH.Adjustment)
+	protected.HandleFunc("POST /api/v1/inventory/transfer", stockH.Transfer)
+	protected.HandleFunc("GET /api/v1/branches/{id}/inventory", stockH.ListInventory)
+
+	// Reports
+	protected.HandleFunc("GET /api/v1/branches/{id}/reports/sales", reportH.Sales)
+	protected.HandleFunc("GET /api/v1/branches/{id}/reports/stock", reportH.Stock)
+	protected.HandleFunc("GET /api/v1/branches/{id}/reports/profit-loss", reportH.ProfitLoss)
+
+	// Export
+	protected.HandleFunc("GET /api/v1/branches/{id}/reports/sales/export", exportH.SalesExport)
 
 	mux.Handle("/api/v1/", middleware.AuthMiddleware(protected))
 
