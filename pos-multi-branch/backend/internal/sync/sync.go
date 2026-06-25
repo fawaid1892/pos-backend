@@ -19,6 +19,28 @@ const (
 	StatusConflict = "conflict"
 )
 
+// validSyncTables is a whitelist of table names allowed in dynamic SQL queries.
+// Never add user-controlled values — only hardcoded table names that exist in the schema.
+var validSyncTables = map[string]bool{
+	"transactions":      true,
+	"transaction_items": true,
+	"products":          true,
+	"categories":        true,
+	"branches":          true,
+	"branch_products":   true,
+	"sync_queue":        true,
+	"users":             true,
+}
+
+// safeTableName validates a table name against the whitelist.
+// Returns the table name if valid, or empty string if not.
+func safeTableName(name string) string {
+	if validSyncTables[name] {
+		return name
+	}
+	return ""
+}
+
 // SyncRecord represents a queued sync operation.
 type SyncRecord struct {
 	ID        int64  `json:"id"`
@@ -228,16 +250,26 @@ func (e *Engine) pushTransaction(ctx context.Context, tx pendingTransactionRow) 
 }
 
 func (e *Engine) markSynced(table string, recordID int64) {
+	t := safeTableName(table)
+	if t == "" {
+		log.Printf("[sync] markSynced: invalid table name %q", table)
+		return
+	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	_, _ = e.sqliteDB.Exec(
-		fmt.Sprintf(`UPDATE %s SET pending_sync=0, synced_at=?, sync_status='synced' WHERE id=?`, table),
+		fmt.Sprintf(`UPDATE %s SET pending_sync=0, synced_at=?, sync_status='synced' WHERE id=?`, t),
 		now, recordID,
 	)
 }
 
 func (e *Engine) markConflict(table string, recordID int64) {
+	t := safeTableName(table)
+	if t == "" {
+		log.Printf("[sync] markConflict: invalid table name %q", table)
+		return
+	}
 	_, _ = e.sqliteDB.Exec(
-		fmt.Sprintf(`UPDATE %s SET sync_status='conflict' WHERE id=?`, table),
+		fmt.Sprintf(`UPDATE %s SET sync_status='conflict' WHERE id=?`, t),
 		recordID,
 	)
 }
@@ -499,12 +531,17 @@ func (e *Engine) GetPendingItems(ctx context.Context) ([]SyncRecord, error) {
 
 // ResolveConflict marks a conflicted record and enqueues a resolution.
 func (e *Engine) ResolveConflict(tableName string, recordID int64, resolution map[string]interface{}) error {
+	t := safeTableName(tableName)
+	if t == "" {
+		return fmt.Errorf("resolve conflict: invalid table name %q", tableName)
+	}
+
 	// Mark the local record as synced with the resolved data
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	// Update sync_status
 	_, err := e.sqliteDB.Exec(
-		fmt.Sprintf(`UPDATE %s SET sync_status='synced', pending_sync=0, synced_at=? WHERE id=?`, tableName),
+		fmt.Sprintf(`UPDATE %s SET sync_status='synced', pending_sync=0, synced_at=? WHERE id=?`, t),
 		now, recordID,
 	)
 	if err != nil {
@@ -512,5 +549,5 @@ func (e *Engine) ResolveConflict(tableName string, recordID int64, resolution ma
 	}
 
 	// Enqueue the resolution payload
-	return e.Enqueue(tableName, recordID, "resolve", resolution)
+	return e.Enqueue(t, recordID, "resolve", resolution)
 }
