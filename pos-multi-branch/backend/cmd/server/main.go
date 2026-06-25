@@ -8,6 +8,7 @@ import (
 	"pos-multi-branch/backend/internal/database"
 	"pos-multi-branch/backend/internal/handler"
 	"pos-multi-branch/backend/internal/middleware"
+	"pos-multi-branch/backend/internal/ws"
 )
 
 func main() {
@@ -39,9 +40,14 @@ func main() {
 	exportH := handler.NewExportHandler()
 	syncH := handler.NewSyncHandler(sqliteDB.DB)
 
+	// WebSocket hub for realtime notifications
+	wsHub := ws.NewHub()
+	ws.SetDefaultHub(wsHub)
+
 	mux := http.NewServeMux()
 
 	// ─── Public routes ───
+	mux.Handle("GET /api/v1/ws", wsHub)
 	mux.HandleFunc("POST /api/v1/auth/login", authH.Login)
 
 	// ─── Protected routes ───
