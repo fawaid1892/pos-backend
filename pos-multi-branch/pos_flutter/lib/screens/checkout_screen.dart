@@ -18,14 +18,17 @@ class CheckoutScreen extends StatefulWidget {
 class _CheckoutScreenState extends State<CheckoutScreen> {
   final _amountController = TextEditingController();
   final _discountController = TextEditingController();
+  final _referenceController = TextEditingController();
   final _transactionService = TransactionService();
-  final List<Map<String, dynamic>> _paymentMethods = const [
-    {'key': 'Tunai', 'icon': Icons.money},
-    {'key': 'QRIS', 'icon': Icons.qr_code},
-    {'key': 'Transfer', 'icon': Icons.account_balance},
-    {'key': 'Kartu Debit', 'icon': Icons.credit_card},
-  ];
   bool _isProcessing = false;
+
+  // Payment methods
+  static const List<Map<String, dynamic>> _paymentMethods = [
+    {'key': 'Tunai', 'icon': Icons.money, 'label': 'Tunai'},
+    {'key': 'QRIS', 'icon': Icons.qr_code, 'label': 'QRIS'},
+    {'key': 'Transfer', 'icon': Icons.account_balance, 'label': 'Transfer'},
+    {'key': 'EDC', 'icon': Icons.credit_card, 'label': 'EDC'},
+  ];
 
   // Predefined tax rates: 0% (non-PPN), 11% (PPN standard)
   final List<Map<String, dynamic>> _taxRates = const [
@@ -37,6 +40,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   void dispose() {
     _amountController.dispose();
     _discountController.dispose();
+    _referenceController.dispose();
     super.dispose();
   }
 
@@ -55,11 +59,31 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   bool get _isPaymentValid =>
       _amountPaid >= context.read<CartProvider>().grandTotal;
 
+  bool get _needsReference {
+    final method = context.read<CartProvider>().selectedPaymentMethod;
+    return method == 'QRIS' || method == 'Transfer';
+  }
+
+  bool get _isReferenceValid {
+    if (!_needsReference) return true;
+    return _referenceController.text.trim().isNotEmpty;
+  }
+
   Future<void> _processPayment() async {
     if (!_isPaymentValid) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Jumlah bayar kurang dari total belanja'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (!_isReferenceValid) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Masukkan nomor referensi pembayaran'),
           backgroundColor: Colors.red,
         ),
       );
@@ -78,6 +102,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       cart.setCartDiscount(disc);
     }
 
+    // Set payment reference if applicable
+    if (_needsReference) {
+      cart.setPaymentReference(_referenceController.text.trim());
+    }
+
     final transaction = cart.buildTransaction(
       id: 'trx_${DateTime.now().millisecondsSinceEpoch}',
       branchId: auth.branchId ?? 'branch_001',
@@ -89,7 +118,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
 
     try {
-      // Save transaction to local SQLite
       await _transactionService.submitTransaction(transaction);
       if (!mounted) return;
       cart.clearCart();
@@ -137,7 +165,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Order items summary
+            // ── Order items summary ──
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
@@ -153,7 +181,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('${item.productName} x${item.quantity}'),
+                              Expanded(
+                                child: Text(
+                                    '${item.productName} x${item.quantity}'),
+                              ),
                               Text('Rp ${_formatPrice(item.subtotal)}'),
                             ],
                           ),
@@ -177,7 +208,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               style: const TextStyle(color: Colors.red)),
                         ],
                       ),
-                    if (cart.taxRate > 0) ...[                      
+                    if (cart.taxRate > 0) ...[
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -208,7 +239,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Pajak (Tax Rate Selector)
+            // ── Tax Selector ──
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
@@ -218,19 +249,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     const Text('Pajak (PPN)',
                         style: TextStyle(fontWeight: FontWeight.w600)),
                     const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _taxRates.map((tax) {
-                        final isSelected = cart.taxRate == tax['rate'];
-                        return ChoiceChip(
+                    SegmentedButton<double>(
+                      segments: _taxRates.map((tax) {
+                        return ButtonSegment<double>(
+                          value: tax['rate'] as double,
                           label: Text(tax['label'] as String),
-                          selected: isSelected,
-                          onSelected: (_) {
-                            cart.setTaxRate(tax['rate'] as double);
-                          },
                         );
                       }).toList(),
+                      selected: {cart.taxRate},
+                      onSelectionChanged: (selected) {
+                        cart.setTaxRate(selected.first);
+                      },
                     ),
                     if (cart.taxRate > 0) ...[
                       const SizedBox(height: 8),
@@ -254,7 +283,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Discount
+            // ── Discount ──
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
@@ -284,7 +313,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Payment method
+            // ── Payment Method ──
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
@@ -294,26 +323,28 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     const Text('Metode Bayar',
                         style: TextStyle(fontWeight: FontWeight.w600)),
                     const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _paymentMethods.map((method) {
-                        final isSelected =
-                            cart.selectedPaymentMethod == method['key'];
-                        return ChoiceChip(
-                          label: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(method['icon'] as IconData, size: 18),
-                              const SizedBox(width: 4),
-                              Text(method['key'] as String),
-                            ],
-                          ),
-                          selected: isSelected,
-                          onSelected: (_) =>
-                              cart.setPaymentMethod(method['key'] as String),
+                    SegmentedButton<String>(
+                      segments: _paymentMethods.map((m) {
+                        return ButtonSegment<String>(
+                          value: m['key'] as String,
+                          label: Text(m['label'] as String),
+                          icon: Icon(m['icon'] as IconData, size: 18),
                         );
                       }).toList(),
+                      selected: {cart.selectedPaymentMethod},
+                      onSelectionChanged: (selected) {
+                        cart.setPaymentMethod(selected.first);
+                        setState(() {});
+                      },
+                      showSelectedIcon: false,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _getPaymentMethodHint(cart.selectedPaymentMethod),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
@@ -321,15 +352,78 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Amount paid
+            // ── Reference Number (QRIS / Transfer) ──
+            if (_needsReference)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            cart.selectedPaymentMethod == 'QRIS'
+                                ? Icons.qr_code
+                                : Icons.receipt_long,
+                            size: 18,
+                            color: colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            cart.selectedPaymentMethod == 'QRIS'
+                                ? 'Referensi QRIS'
+                                : 'Referensi Transfer',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _referenceController,
+                        decoration: InputDecoration(
+                          hintText: cart.selectedPaymentMethod == 'QRIS'
+                              ? 'Masukkan ID Merchant / Ref QRIS'
+                              : 'Masukkan No. Referensi Transfer',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          filled: true,
+                          fillColor: colorScheme.surfaceVariant,
+                          prefixIcon: const Icon(Icons.tag, size: 20),
+                        ),
+                        keyboardType: TextInputType.text,
+                        textInputAction: TextInputAction.done,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            const SizedBox(height: 16),
+
+            // ── Amount Paid ──
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Jumlah Bayar',
-                        style: TextStyle(fontWeight: FontWeight.w600)),
+                    Row(
+                      children: [
+                        const Text('Jumlah Bayar',
+                            style:
+                                TextStyle(fontWeight: FontWeight.w600)),
+                        const Spacer(),
+                        Text(
+                          'Tagihan: Rp ${_formatPrice(cart.grandTotal)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 8),
                     TextField(
                       controller: _amountController,
@@ -370,6 +464,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
             ),
             const SizedBox(height: 24),
+
+            // ── Submit Button ──
             SizedBox(
               width: double.infinity,
               height: 52,
@@ -395,6 +491,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         ),
       ),
     );
+  }
+
+  String _getPaymentMethodHint(String method) {
+    switch (method) {
+      case 'Tunai':
+        return 'Bayar langsung dengan uang tunai';
+      case 'QRIS':
+        return 'Scan QR / masukkan referensi QRIS';
+      case 'Transfer':
+        return 'Pembayaran via transfer bank';
+      case 'EDC':
+        return 'Pembayaran via kartu debit/kredit EDC';
+      default:
+        return '';
+    }
   }
 
   String _formatPrice(double amount) {

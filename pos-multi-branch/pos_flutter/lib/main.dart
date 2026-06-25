@@ -15,6 +15,7 @@ import 'screens/stock_adjustment_screen.dart';
 import 'screens/stock_transfer_screen.dart';
 import 'screens/report_screen.dart';
 import 'screens/export_screen.dart';
+import 'screens/low_stock_alert_screen.dart';
 import 'widgets/sync_status_widget.dart';
 import 'models/stock_adjustment.dart';
 import 'database/local_database.dart';
@@ -90,6 +91,7 @@ class PosApp extends StatelessWidget {
         '/reports': (context) => const ReportScreen(),
         '/export-report': (context) => const ExportScreen(),
         '/sync-status': (context) => const SyncStatusScreen(),
+        '/low-stock-alert': (context) => const LowStockAlertScreen(),
       },
     );
   }

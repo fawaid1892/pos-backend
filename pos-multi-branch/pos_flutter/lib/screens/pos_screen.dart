@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/product.dart';
 import '../providers/cart_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/stock_provider.dart';
 import '../providers/sync_provider.dart';
 import '../providers/theme_provider.dart';
 import '../services/product_service.dart';
@@ -60,6 +61,10 @@ class _PosScreenState extends State<PosScreen> {
         _filteredProducts = products;
         _isLoadingProducts = false;
       });
+      // Load stock alerts for badge
+      if (mounted) {
+        context.read<StockProvider>().loadAlerts(branchId: branchId);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -128,6 +133,22 @@ class _PosScreenState extends State<PosScreen> {
             icon: const SyncStatusIcon(),
             onPressed: () => Navigator.pushNamed(context, '/sync-status'),
             tooltip: 'Sync Status',
+          ),
+          // Low stock alert badge
+          Consumer<StockProvider>(
+            builder: (context, stockProv, _) {
+              final alertCount = stockProv.alerts.length;
+              return Badge(
+                isLabelVisible: alertCount > 0,
+                label: Text('$alertCount'),
+                child: IconButton(
+                  icon: const Icon(Icons.inventory_2),
+                  onPressed: () => Navigator.pushNamed(
+                      context, '/low-stock-alert'),
+                  tooltip: 'Peringatan Stok',
+                ),
+              );
+            },
           ),
           // Manual sync button
           Consumer<SyncProvider>(

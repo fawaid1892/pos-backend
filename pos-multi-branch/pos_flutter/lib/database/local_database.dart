@@ -21,7 +21,7 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       onConfigure: _onConfigure,
@@ -126,6 +126,7 @@ class LocalDatabase {
         tax_amount REAL NOT NULL DEFAULT 0,
         grand_total REAL NOT NULL DEFAULT 0,
         payment_method TEXT NOT NULL DEFAULT 'Tunai',
+        payment_reference TEXT,
         amount_paid REAL NOT NULL DEFAULT 0,
         change_amount REAL NOT NULL DEFAULT 0,
         receipt_number TEXT,
@@ -219,6 +220,10 @@ class LocalDatabase {
       // Add tax columns to transactions
       await db.execute('ALTER TABLE transactions ADD COLUMN tax_rate REAL NOT NULL DEFAULT 0');
       await db.execute('ALTER TABLE transactions ADD COLUMN tax_amount REAL NOT NULL DEFAULT 0');
+    }
+    if (oldVersion < 3) {
+      // Add payment_reference column
+      await db.execute('ALTER TABLE transactions ADD COLUMN payment_reference TEXT');
     }
   }
 

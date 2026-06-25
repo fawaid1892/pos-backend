@@ -1,5 +1,6 @@
 import '../database/local_database.dart';
 import '../models/report.dart';
+import 'pdf_export_service.dart';
 
 /// Service for report queries backed by SQLite.
 ///
@@ -190,7 +191,7 @@ class ReportService {
     );
   }
 
-  /// Export report (stub — in production would generate PDF/XLSX file).
+  /// Export report — generates actual PDF file for 'pdf' format.
   Future<String> exportReport({
     required String branchId,
     required String format,
@@ -198,6 +199,27 @@ class ReportService {
     required DateTime startDate,
     required DateTime endDate,
   }) async {
+    if (format == 'pdf') {
+      final pdfService = PdfExportService();
+
+      switch (reportType) {
+        case 'sales':
+          final report = await getSalesReport(
+              branchId: branchId, startDate: startDate, endDate: endDate);
+          return await pdfService.exportSalesReport(report);
+
+        case 'stock':
+          final report = await getStockReport(branchId);
+          return await pdfService.exportStockReport(report);
+
+        case 'profit_loss':
+          final report = await getProfitLossReport(
+              branchId: branchId, startDate: startDate, endDate: endDate);
+          return await pdfService.exportProfitLossReport(report);
+      }
+    }
+
+    // For non-PDF formats, return stub (Excel would be generated here)
     await Future.delayed(const Duration(milliseconds: 500));
     return 'Laporan terexport: $reportType - $format - '
         '${startDate.toIso8601String()} to ${endDate.toIso8601String()}';

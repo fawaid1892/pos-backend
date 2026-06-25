@@ -1,17 +1,194 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_bluetooth_basic/flutter_bluetooth_basic.dart';
 import '../models/transaction.dart';
 import '../providers/theme_provider.dart';
+import '../services/thermal_print_service.dart';
 import '../utils/responsive.dart';
 
-class ReceiptScreen extends StatelessWidget {
+class ReceiptScreen extends StatefulWidget {
   const ReceiptScreen({super.key});
+
+  @override
+  State<ReceiptScreen> createState() => _ReceiptScreenState();
+}
+
+class _ReceiptScreenState extends State<ReceiptScreen> {
+  final _printService = ThermalPrintService();
+  bool _isPrinting = false;
+
+  Future<void> _showPrintDialog(Transaction transaction) async {
+    final devices = await _printService.getBondedDevices();
+
+    if (!mounted) return;
+
+    if (devices.isEmpty) {
+      _showNoPrinterDialog();
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => _buildPrinterListSheet(ctx, transaction, devices),
+    );
+  }
+
+  void _showNoPrinterDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.print_disabled, size: 48, color: Colors.orange),
+        title: const Text('Printer Tidak Ditemukan'),
+        content: const Text(
+          'Tidak ada printer Bluetooth yang terhubung.\n\n'
+          'Pastikan printer thermal sudah di-pairing dengan perangkat ini '
+          'melalui pengaturan Bluetooth.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK'),
+          ),
+          TextButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _tryWindowsPrint(transactionFromParent: ctx);
+            },
+            icon: const Icon(Icons.computer, size: 16),
+            label: const Text('Coba USB (Windows)'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Transaction? _cachedTransaction;
+
+  void _tryWindowsPrint({BuildContext? transactionFromParent}) {
+    final transaction = _cachedTransaction;
+    if (transaction == null) return;
+    _printViaUsb(transaction);
+  }
+
+  Widget _buildPrinterListSheet(
+      BuildContext ctx, Transaction transaction, List<BluetoothDevice> devices) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.print, size: 20),
+              const SizedBox(width: 8),
+              const Text('Pilih Printer',
+                  style: TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold)),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _showPrintDialog(transaction);
+                },
+                tooltip: 'Scan ulang',
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text('Printer Bluetooth terdeteksi:',
+              style: TextStyle(color: Colors.grey, fontSize: 13)),
+          const SizedBox(height: 8),
+          ...devices.map((device) => ListTile(
+                leading: const CircleAvatar(
+                  child: Icon(Icons.bluetooth),
+                ),
+                title: Text(device.name ?? 'Printer'),
+                subtitle: Text(device.address ?? ''),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await _printViaBluetooth(device, transaction);
+                },
+              )),
+          const Divider(),
+          ListTile(
+            leading: const CircleAvatar(
+              child: Icon(Icons.usb),
+            ),
+            title: const Text('USB / Windows Printer'),
+            subtitle: const Text('Cetak via port USB (LPT/USB)'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () async {
+              Navigator.pop(ctx);
+              await _printViaUsb(transaction);
+            },
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _printViaBluetooth(
+      BluetoothDevice device, Transaction transaction) async {
+    setState(() => _isPrinting = true);
+
+    final success = await _printService.printReceiptBluetooth(
+      device: device,
+      transaction: transaction,
+      storeName: 'TOKO KAMI',
+      storeAddress: 'POS Multi Branch',
+      storePhone: '021-12345678',
+    );
+
+    if (!mounted) return;
+    setState(() => _isPrinting = false);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+            success ? 'Struk berhasil dicetak!' : 'Gagal mencetak struk'),
+        backgroundColor: success ? Colors.green : Colors.red,
+      ),
+    );
+  }
+
+  Future<void> _printViaUsb(Transaction transaction) async {
+    setState(() => _isPrinting = true);
+
+    final success = await _printService.printReceiptUsb(
+      transaction: transaction,
+      storeName: 'TOKO KAMI',
+      storeAddress: 'POS Multi Branch',
+      storePhone: '021-12345678',
+    );
+
+    if (!mounted) return;
+    setState(() => _isPrinting = false);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+            success
+                ? 'Struk dikirim ke printer USB'
+                : 'USB printing tidak tersedia di platform ini'),
+        backgroundColor: success ? Colors.green : Colors.orange,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final transaction =
         ModalRoute.of(context)!.settings.arguments as Transaction;
+    _cachedTransaction = transaction;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isTablet = context.isTablet;
@@ -30,14 +207,25 @@ class ReceiptScreen extends StatelessWidget {
               tooltip: 'Toggle Dark Mode',
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.print),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                    content: Text('Cetak struk via Bluetooth printer')),
-              );
-            },
+          Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.print),
+                onPressed:
+                    _isPrinting ? null : () => _showPrintDialog(transaction),
+                tooltip: 'Cetak Struk',
+              ),
+              if (_isPrinting)
+                const Positioned(
+                  right: 8,
+                  top: 8,
+                  child: SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+            ],
           ),
         ],
       ),
@@ -93,6 +281,10 @@ class ReceiptScreen extends StatelessWidget {
                     _infoRow('Kasir', transaction.cashierName, colorScheme),
                     _infoRow('Metode Bayar', transaction.paymentMethod,
                         colorScheme),
+                    if (transaction.paymentReference != null &&
+                        transaction.paymentReference!.isNotEmpty)
+                      _infoRow('Referensi', transaction.paymentReference!,
+                          colorScheme),
                     const Divider(),
 
                     // Items
@@ -124,6 +316,11 @@ class ReceiptScreen extends StatelessWidget {
                     if (transaction.discountTotal > 0)
                       _totalRow('Diskon', -transaction.discountTotal,
                           colorScheme, color: Colors.red),
+                    if (transaction.taxRate > 0)
+                      _totalRow(
+                          'Pajak (${(transaction.taxRate * 100).toStringAsFixed(0)}%)',
+                          transaction.taxAmount,
+                          colorScheme),
                     _totalRow('Grand Total', transaction.grandTotal, colorScheme,
                         bold: true, color: Colors.green),
                     const Divider(),
@@ -136,6 +333,7 @@ class ReceiptScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
 
+            // Action buttons
             Row(
               children: [
                 Expanded(
@@ -164,6 +362,34 @@ class ReceiptScreen extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+
+            // Print button (prominent)
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: _isPrinting
+                    ? null
+                    : () => _showPrintDialog(transaction),
+                icon: _isPrinting
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.print),
+                label: Text(
+                  _isPrinting ? 'Mencetak...' : 'Cetak Struk',
+                  style: const TextStyle(fontSize: 16),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: colorScheme.primary,
+                  foregroundColor: colorScheme.onPrimary,
+                ),
+              ),
             ),
           ],
         ),

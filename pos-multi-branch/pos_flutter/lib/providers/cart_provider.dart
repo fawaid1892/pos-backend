@@ -7,11 +7,13 @@ class CartProvider extends ChangeNotifier {
   double _discountTotal = 0.0;
   double _taxRate = 0.0; // e.g. 0.11 for 11% PPN
   String _selectedPaymentMethod = 'Tunai';
+  String? _paymentReference;
 
   List<TransactionItem> get items => List.unmodifiable(_items);
   double get discountTotal => _discountTotal;
   double get taxRate => _taxRate;
   String get selectedPaymentMethod => _selectedPaymentMethod;
+  String? get paymentReference => _paymentReference;
 
   int get itemCount => _items.fold(0, (sum, item) => sum + item.quantity);
 
@@ -81,6 +83,14 @@ class CartProvider extends ChangeNotifier {
 
   void setPaymentMethod(String method) {
     _selectedPaymentMethod = method;
+    if (method == 'Tunai' || method == 'EDC') {
+      _paymentReference = null;
+    }
+    notifyListeners();
+  }
+
+  void setPaymentReference(String ref) {
+    _paymentReference = ref;
     notifyListeners();
   }
 
@@ -89,6 +99,7 @@ class CartProvider extends ChangeNotifier {
     _discountTotal = 0.0;
     _taxRate = 0.0;
     _selectedPaymentMethod = 'Tunai';
+    _paymentReference = null;
     notifyListeners();
   }
 
@@ -123,6 +134,7 @@ class CartProvider extends ChangeNotifier {
       taxAmount: taxAmount,
       grandTotal: grandTotal,
       paymentMethod: _selectedPaymentMethod,
+      paymentReference: _paymentReference,
       amountPaid: amountPaid,
       change: change,
       createdAt: DateTime.now(),

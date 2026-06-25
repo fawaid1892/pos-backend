@@ -50,6 +50,7 @@ class Transaction {
   final double taxAmount;
   final double grandTotal;
   final String paymentMethod;
+  final String? paymentReference;
   final double amountPaid;
   final double change;
   final DateTime createdAt;
@@ -67,6 +68,7 @@ class Transaction {
     this.taxAmount = 0.0,
     required this.grandTotal,
     required this.paymentMethod,
+    this.paymentReference,
     required this.amountPaid,
     required this.change,
     required this.createdAt,
@@ -85,6 +87,7 @@ class Transaction {
         'taxAmount': taxAmount,
         'grandTotal': grandTotal,
         'paymentMethod': paymentMethod,
+        'paymentReference': paymentReference,
         'amountPaid': amountPaid,
         'change': change,
         'createdAt': createdAt.toIso8601String(),
@@ -105,6 +108,7 @@ class Transaction {
         taxAmount: (json['taxAmount'] as num?)?.toDouble() ?? 0.0,
         grandTotal: (json['grandTotal'] as num).toDouble(),
         paymentMethod: json['paymentMethod'] as String,
+        paymentReference: json['paymentReference'] as String?,
         amountPaid: (json['amountPaid'] as num).toDouble(),
         change: (json['change'] as num).toDouble(),
         createdAt: DateTime.parse(json['createdAt'] as String),
