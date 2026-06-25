@@ -5,6 +5,7 @@ import 'providers/cart_provider.dart';
 import 'providers/stock_provider.dart';
 import 'providers/report_provider.dart';
 import 'providers/sync_provider.dart';
+import 'providers/theme_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/pos_screen.dart';
 import 'screens/checkout_screen.dart';
@@ -17,12 +18,21 @@ import 'screens/export_screen.dart';
 import 'widgets/sync_status_widget.dart';
 import 'models/stock_adjustment.dart';
 import 'database/local_database.dart';
+import 'services/seed_data_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize local database
   await LocalDatabase().database;
+
+  // Seed initial data if database is empty
+  final seedService = SeedDataService();
+  await seedService.seedIfEmpty();
+
+  // Initialize theme provider
+  final themeProvider = ThemeProvider();
+  await themeProvider.init();
 
   // Initialize sync provider
   final syncProvider = SyncProvider();
@@ -31,6 +41,7 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
+        ChangeNotifierProvider.value(value: themeProvider),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => CartProvider()),
         ChangeNotifierProvider(create: (_) => StockProvider()),
@@ -47,18 +58,14 @@ class PosApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeProv = context.watch<ThemeProvider>();
+
     return MaterialApp(
       title: 'POS Multi Branch',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorSchemeSeed: const Color(0xFF1565C0),
-        useMaterial3: true,
-        brightness: Brightness.light,
-        appBarTheme: const AppBarTheme(
-          centerTitle: true,
-          elevation: 1,
-        ),
-      ),
+      theme: buildLightTheme(),
+      darkTheme: buildDarkTheme(),
+      themeMode: themeProv.themeMode,
       initialRoute: '/login',
       routes: {
         '/login': (context) => const LoginScreen(),

@@ -1,10 +1,12 @@
 import 'package:flutter/foundation.dart';
 import '../models/report.dart';
-import '../services/mock_report_service.dart';
+import '../services/report_service.dart';
 
 /// State management for sales, stock, and profit-loss reports.
+///
+/// Uses SQLite-backed ReportService instead of mock data.
 class ReportProvider extends ChangeNotifier {
-  final MockReportService _reportService = MockReportService();
+  final ReportService _reportService = ReportService();
 
   // Current branch context
   String? _currentBranchId;
@@ -69,7 +71,7 @@ class ReportProvider extends ChangeNotifier {
     }
   }
 
-  /// Load sales report for the given date range.
+  /// Load sales report for the given date range from SQLite.
   Future<void> loadSalesReport({
     String? branchId,
     DateTime? startDate,
@@ -94,13 +96,14 @@ class ReportProvider extends ChangeNotifier {
       );
       _isLoadingSalesReport = false;
     } catch (e) {
-      _salesReportError = 'Gagal memuat laporan penjualan: $e';
+      debugPrint('ReportProvider.loadSalesReport error: $e');
+      _salesReportError = 'Gagal memuat laporan penjualan: ${e.toString()}';
       _isLoadingSalesReport = false;
     }
     notifyListeners();
   }
 
-  /// Load stock report.
+  /// Load stock report from SQLite.
   Future<void> loadStockReport({String? branchId}) async {
     final bid = branchId ?? _currentBranchId;
     if (bid == null) return;
@@ -113,13 +116,14 @@ class ReportProvider extends ChangeNotifier {
       _stockReport = await _reportService.getStockReport(bid);
       _isLoadingStockReport = false;
     } catch (e) {
-      _stockReportError = 'Gagal memuat laporan stok: $e';
+      debugPrint('ReportProvider.loadStockReport error: $e');
+      _stockReportError = 'Gagal memuat laporan stok: ${e.toString()}';
       _isLoadingStockReport = false;
     }
     notifyListeners();
   }
 
-  /// Load profit-loss report for the given date range.
+  /// Load profit-loss report for the given date range from SQLite.
   Future<void> loadProfitLossReport({
     String? branchId,
     DateTime? startDate,
@@ -144,7 +148,8 @@ class ReportProvider extends ChangeNotifier {
       );
       _isLoadingProfitLoss = false;
     } catch (e) {
-      _profitLossError = 'Gagal memuat laporan laba rugi: $e';
+      debugPrint('ReportProvider.loadProfitLoss error: $e');
+      _profitLossError = 'Gagal memuat laporan laba rugi: ${e.toString()}';
       _isLoadingProfitLoss = false;
     }
     notifyListeners();
@@ -181,7 +186,8 @@ class ReportProvider extends ChangeNotifier {
       _exportResult = result;
       _isExporting = false;
     } catch (e) {
-      _exportError = 'Gagal mengexport laporan: $e';
+      debugPrint('ReportProvider.exportReport error: $e');
+      _exportError = 'Gagal mengexport laporan: ${e.toString()}';
       _isExporting = false;
     }
     notifyListeners();

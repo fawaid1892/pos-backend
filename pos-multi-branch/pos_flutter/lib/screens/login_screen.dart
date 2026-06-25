@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/theme_provider.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -48,6 +49,9 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       body: Center(
@@ -58,32 +62,45 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.store,
-                  size: 80,
-                  color: Theme.of(context).colorScheme.primary,
+                // Logo area
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.store,
+                    size: 60,
+                    color: colorScheme.primary,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Text(
                   'POS Multi Branch',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.onSurface,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   'Masuk untuk memulai transaksi',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: Colors.grey[600],
-                      ),
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                 ),
                 const SizedBox(height: 40),
                 TextFormField(
                   controller: _emailController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Email',
-                    prefixIcon: Icon(Icons.email_outlined),
-                    border: OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.email_outlined),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    filled: true,
+                    fillColor: colorScheme.surfaceVariant,
                   ),
                   keyboardType: TextInputType.emailAddress,
                   validator: (v) {
@@ -98,7 +115,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   decoration: InputDecoration(
                     labelText: 'Password',
                     prefixIcon: const Icon(Icons.lock_outlined),
-                    border: const OutlineInputBorder(),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    filled: true,
+                    fillColor: colorScheme.surfaceVariant,
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscurePassword
@@ -122,6 +143,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   height: 48,
                   child: ElevatedButton(
                     onPressed: auth.isLoading ? null : _handleLogin,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: colorScheme.primary,
+                      foregroundColor: colorScheme.onPrimary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                     child: auth.isLoading
                         ? const SizedBox(
                             height: 20,
@@ -129,6 +157,32 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Text('Masuk', style: TextStyle(fontSize: 16)),
+                  ),
+                ),
+                const SizedBox(height: 32),
+
+                // Dark mode toggle
+                Consumer<ThemeProvider>(
+                  builder: (context, themeProv, _) => Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.light_mode,
+                        size: 18,
+                        color: isDark ? Colors.grey : colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Switch(
+                        value: themeProv.isDarkMode,
+                        onChanged: (_) => themeProv.toggleTheme(),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(
+                        Icons.dark_mode,
+                        size: 18,
+                        color: isDark ? colorScheme.primary : Colors.grey,
+                      ),
+                    ],
                   ),
                 ),
               ],

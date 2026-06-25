@@ -1,10 +1,12 @@
 import 'package:flutter/foundation.dart';
 import '../models/stock_adjustment.dart';
-import '../services/mock_stock_service.dart';
+import '../services/stock_service.dart';
 
 /// State management for stock inventory, adjustments, transfers, and alerts.
+///
+/// Uses SQLite-backed StockService instead of mock data.
 class StockProvider extends ChangeNotifier {
-  final MockStockService _stockService = MockStockService();
+  final StockService _stockService = StockService();
 
   // Current branch context
   String? _currentBranchId;
@@ -40,7 +42,7 @@ class StockProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Load inventory for the current branch.
+  /// Load inventory for the current branch from SQLite.
   Future<void> loadInventory({String? branchId}) async {
     final bid = branchId ?? _currentBranchId;
     if (bid == null) return;
@@ -54,7 +56,8 @@ class StockProvider extends ChangeNotifier {
       _filteredInventory = List.from(_inventory);
       _isLoadingInventory = false;
     } catch (e) {
-      _inventoryError = 'Gagal memuat inventory: $e';
+      debugPrint('StockProvider.loadInventory error: $e');
+      _inventoryError = 'Gagal memuat inventory: ${e.toString()}';
       _isLoadingInventory = false;
     }
     notifyListeners();
@@ -74,7 +77,7 @@ class StockProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Load stock alerts for the current branch.
+  /// Load stock alerts for the current branch from SQLite.
   Future<void> loadAlerts({String? branchId}) async {
     final bid = branchId ?? _currentBranchId;
     if (bid == null) return;
@@ -86,12 +89,13 @@ class StockProvider extends ChangeNotifier {
       _alerts = await _stockService.getStockAlerts(bid);
       _isLoadingAlerts = false;
     } catch (e) {
+      debugPrint('StockProvider.loadAlerts error: $e');
       _isLoadingAlerts = false;
     }
     notifyListeners();
   }
 
-  /// Submit a stock adjustment (stock in / stock out).
+  /// Submit a stock adjustment (stock in / stock out) via SQLite.
   Future<StockAdjustment?> submitAdjustment({
     required String productId,
     required int quantity,
@@ -119,13 +123,14 @@ class StockProvider extends ChangeNotifier {
       notifyListeners();
       return result;
     } catch (e) {
+      debugPrint('StockProvider.submitAdjustment error: $e');
       _isSubmittingAdjustment = false;
       notifyListeners();
       return null;
     }
   }
 
-  /// Submit a stock transfer between branches.
+  /// Submit a stock transfer between branches via SQLite.
   Future<StockTransfer?> submitTransfer({
     required String sourceBranchId,
     required String targetBranchId,
@@ -150,6 +155,7 @@ class StockProvider extends ChangeNotifier {
       notifyListeners();
       return result;
     } catch (e) {
+      debugPrint('StockProvider.submitTransfer error: $e');
       _isSubmittingTransfer = false;
       notifyListeners();
       return null;

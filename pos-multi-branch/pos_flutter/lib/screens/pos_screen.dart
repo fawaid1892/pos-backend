@@ -4,10 +4,16 @@ import '../models/product.dart';
 import '../providers/cart_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/sync_provider.dart';
-import '../services/mock_api_service.dart';
+import '../providers/theme_provider.dart';
+import '../services/product_service.dart';
+import '../services/transaction_service.dart';
 import '../widgets/product_tile.dart';
 import '../widgets/cart_item_tile.dart';
 import '../widgets/sync_status_widget.dart';
+import '../widgets/shimmer_loading.dart';
+import '../widgets/error_state_widget.dart';
+import '../widgets/empty_state_widget.dart';
+import '../utils/responsive.dart';
 
 class PosScreen extends StatefulWidget {
   const PosScreen({super.key});
@@ -18,10 +24,12 @@ class PosScreen extends StatefulWidget {
 
 class _PosScreenState extends State<PosScreen> {
   final _searchController = TextEditingController();
-  final _api = MockApiService();
+  final _productService = ProductService();
+  final _transactionService = TransactionService();
   List<Product> _products = [];
   List<Product> _filteredProducts = [];
   bool _isLoadingProducts = true;
+  String? _loadError;
   bool _showCart = false;
 
   @override
@@ -38,16 +46,27 @@ class _PosScreenState extends State<PosScreen> {
   }
 
   Future<void> _loadProducts() async {
-    setState(() => _isLoadingProducts = true);
+    setState(() {
+      _isLoadingProducts = true;
+      _loadError = null;
+    });
     final auth = context.read<AuthProvider>();
     final branchId = auth.branchId ?? 'branch_001';
-    final products = await _api.getProducts(branchId);
-    if (!mounted) return;
-    setState(() {
-      _products = products;
-      _filteredProducts = products;
-      _isLoadingProducts = false;
-    });
+    try {
+      final products = await _productService.getProducts(branchId);
+      if (!mounted) return;
+      setState(() {
+        _products = products;
+        _filteredProducts = products;
+        _isLoadingProducts = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingProducts = false;
+        _loadError = e.toString();
+      });
+    }
   }
 
   void _onSearchChanged() {
@@ -76,11 +95,6 @@ class _PosScreenState extends State<PosScreen> {
   }
 
   Future<void> _scanBarcode() async {
-    // barcode_scan2 integration placeholder
-    // In production:
-    //   import 'package:barcode_scan2/barcode_scan2.dart';
-    //   final result = await BarcodeScanner.scan();
-    //   final product = await _api.getProductByBarcode(result.rawContent, branchId);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Barcode scanner akan aktif di perangkat Android'),
@@ -92,11 +106,23 @@ class _PosScreenState extends State<PosScreen> {
   Widget build(BuildContext context) {
     final cart = context.watch<CartProvider>();
     final auth = context.watch<AuthProvider>();
+    final theme = Theme.of(context);
+    final isTablet = context.isTablet;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(auth.branchName ?? 'POS Multi Branch'),
         actions: [
+          // Dark mode toggle
+          Consumer<ThemeProvider>(
+            builder: (context, themeProv, _) => IconButton(
+              icon: Icon(
+                themeProv.isDarkMode ? Icons.light_mode : Icons.dark_mode,
+              ),
+              onPressed: () => themeProv.toggleTheme(),
+              tooltip: 'Toggle Dark Mode',
+            ),
+          ),
           // Sync status icon button
           IconButton(
             icon: const SyncStatusIcon(),
@@ -155,15 +181,16 @@ class _PosScreenState extends State<PosScreen> {
           ),
         ],
       ),
-      body: _showCart ? _buildCartView(cart) : _buildProductView(cart),
+      body: _showCart ? _buildCartView(cart) : _buildProductView(cart, isTablet),
     );
   }
 
-  Widget _buildProductView(CartProvider cart) {
+  Widget _buildProductView(CartProvider cart, bool isTablet) {
     return Column(
       children: [
+        // Search bar
         Padding(
-          padding: const EdgeInsets.all(12),
+          padding: EdgeInsets.all(isTablet ? 16 : 12),
           child: Row(
             children: [
               Expanded(
@@ -187,35 +214,26 @@ class _PosScreenState extends State<PosScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     filled: true,
-                    fillColor: Theme.of(context).colorScheme.surfaceVariant,
+                    fillColor: theme.colorScheme.surfaceVariant,
                   ),
                 ),
               ),
             ],
           ),
         ),
+
+        // Products list / grid
         Expanded(
-          child: _isLoadingProducts
-              ? const Center(child: CircularProgressIndicator())
-              : _filteredProducts.isEmpty
-                  ? const Center(child: Text('Produk tidak ditemukan'))
-                  : RefreshIndicator(
-                      onRefresh: _loadProducts,
-                      child: ListView.builder(
-                        itemCount: _filteredProducts.length,
-                        itemBuilder: (context, index) => ProductTile(
-                          product: _filteredProducts[index],
-                          onAdd: () => _addToCart(_filteredProducts[index]),
-                        ),
-                      ),
-                    ),
+          child: _buildProductList(cart),
         ),
+
+        // Bottom cart bar
         if (!cart.isEmpty)
           SafeArea(
             child: Container(
-              padding: const EdgeInsets.all(12),
+              padding: EdgeInsets.all(isTablet ? 16 : 12),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
+                color: theme.colorScheme.surface,
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.1),
@@ -233,13 +251,16 @@ class _PosScreenState extends State<PosScreen> {
                       children: [
                         Text(
                           '${cart.itemCount} item',
-                          style: const TextStyle(color: Colors.grey),
+                          style: TextStyle(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
                         ),
                         Text(
                           'Rp ${_formatPrice(cart.grandTotal)}',
-                          style: const TextStyle(
-                            fontSize: 20,
+                          style: TextStyle(
+                            fontSize: isTablet ? 22 : 20,
                             fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.onSurface,
                           ),
                         ),
                       ],
@@ -262,19 +283,115 @@ class _PosScreenState extends State<PosScreen> {
     );
   }
 
-  Widget _buildCartView(CartProvider cart) {
-    if (cart.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.shopping_cart_outlined, size: 80, color: Colors.grey),
-            SizedBox(height: 16),
-            Text('Keranjang kosong', style: TextStyle(color: Colors.grey)),
-          ],
+  Widget _buildProductList(CartProvider cart) {
+    if (_isLoadingProducts) {
+      return const ShimmerPage(itemCount: 8);
+    }
+
+    if (_loadError != null) {
+      return ErrorStateWidget(
+        message: _loadError!,
+        title: 'Gagal memuat produk',
+        onRetry: _loadProducts,
+      );
+    }
+
+    if (_filteredProducts.isEmpty) {
+      return const EmptyStateWidget.search();
+    }
+
+    final isTablet = context.isTablet;
+
+    if (isTablet) {
+      // Grid layout for tablet
+      return RefreshIndicator(
+        onRefresh: _loadProducts,
+        child: GridView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            childAspectRatio: 1.2,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+          ),
+          itemCount: _filteredProducts.length,
+          itemBuilder: (context, index) => _buildProductGridTile(
+              _filteredProducts[index]),
         ),
       );
     }
+
+    return RefreshIndicator(
+      onRefresh: _loadProducts,
+      child: ListView.builder(
+        itemCount: _filteredProducts.length,
+        itemBuilder: (context, index) => ProductTile(
+          product: _filteredProducts[index],
+          onAdd: () => _addToCart(_filteredProducts[index]),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProductGridTile(Product product) {
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _addToCart(product),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircleAvatar(
+                backgroundColor: theme.colorScheme.primaryContainer,
+                child: Text(
+                  product.name[0].toUpperCase(),
+                  style: TextStyle(
+                    color: theme.colorScheme.onPrimaryContainer,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                product.name,
+                style: const TextStyle(
+                    fontWeight: FontWeight.w600, fontSize: 13),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const Spacer(),
+              Text(
+                'Rp ${_formatPrice(product.price)}',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+              if (product.stock <= 5)
+                Text(
+                  'Stok: ${product.stock}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCartView(CartProvider cart) {
+    if (cart.isEmpty) {
+      return const EmptyStateWidget.cart();
+    }
+
+    final isTablet = context.isTablet;
 
     return Column(
       children: [
@@ -295,9 +412,9 @@ class _PosScreenState extends State<PosScreen> {
           ),
         ),
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(isTablet ? 20 : 16),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
+            color: theme.colorScheme.surface,
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.1),
@@ -329,7 +446,7 @@ class _PosScreenState extends State<PosScreen> {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.error,
+                        color: theme.colorScheme.error,
                       ),
                     ),
                   ],
@@ -339,13 +456,14 @@ class _PosScreenState extends State<PosScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text('Grand Total:',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      style: TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold)),
                   Text(
                     'Rp ${_formatPrice(cart.grandTotal)}',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.primary,
+                      color: theme.colorScheme.primary,
                     ),
                   ),
                 ],
