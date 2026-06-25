@@ -256,3 +256,17 @@ const (
 	ExportFormatXLSX ExportFormat = "xlsx"
 	ExportFormatCSV  ExportFormat = "csv"
 )
+<<<<<<< HEAD
+=======
+
+// ─── Generic API Response ───
+
+// APIResponse is a generic JSON response wrapper.
+type APIResponse struct {
+	Success bool                    `json:"success"`
+	Message string                  `json:"message,omitempty"`
+	Error   string                  `json:"error,omitempty"`
+	Data    interface{}             `json:"data,omitempty"`
+	Meta    map[string]interface{} `json:"meta,omitempty"`
+}
+>>>>>>> 90c46f770f2582ca6c2d103b433a1a70dc1620f9

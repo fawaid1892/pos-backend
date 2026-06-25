@@ -13,12 +13,26 @@ import (
 func main() {
 	cfg := config.Load()
 
+<<<<<<< HEAD
 	// Database
+=======
+	// ─── Supabase / PostgreSQL ───
+>>>>>>> 90c46f770f2582ca6c2d103b433a1a70dc1620f9
 	if err := database.Connect(cfg.DatabaseURL); err != nil {
 		log.Fatalf("Database connection failed: %v", err)
 	}
 	defer database.Close()
 
+<<<<<<< HEAD
+=======
+	// ─── SQLite sync mirror (local server) ───
+	sqliteDB, err := database.NewSQLiteDB(cfg.SQLitePath)
+	if err != nil {
+		log.Fatalf("SQLite sync mirror failed: %v", err)
+	}
+	defer sqliteDB.Close()
+
+>>>>>>> 90c46f770f2582ca6c2d103b433a1a70dc1620f9
 	// JWT
 	middleware.InitJWT(cfg)
 
@@ -30,6 +44,10 @@ func main() {
 	stockH := handler.NewStockHandler()
 	reportH := handler.NewReportHandler()
 	exportH := handler.NewExportHandler()
+<<<<<<< HEAD
+=======
+	syncH := handler.NewSyncHandler(sqliteDB.DB)
+>>>>>>> 90c46f770f2582ca6c2d103b433a1a70dc1620f9
 
 	mux := http.NewServeMux()
 
@@ -79,6 +97,14 @@ func main() {
 	// Export
 	protected.HandleFunc("GET /api/v1/branches/{id}/reports/sales/export", exportH.SalesExport)
 
+<<<<<<< HEAD
+=======
+	// Sync endpoints (authenticated — branches push/pull using their own credentials)
+	protected.HandleFunc("POST /api/v1/sync/push", syncH.Push)
+	protected.HandleFunc("GET /api/v1/sync/pull", syncH.Pull)
+	protected.HandleFunc("POST /api/v1/sync/resolve", syncH.Resolve)
+
+>>>>>>> 90c46f770f2582ca6c2d103b433a1a70dc1620f9
 	mux.Handle("/api/v1/", middleware.AuthMiddleware(protected))
 
 	addr := ":" + cfg.ServerPort

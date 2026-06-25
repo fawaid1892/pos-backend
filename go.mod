@@ -14,6 +14,10 @@ require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20231201235250-de7065d80cb9 // indirect
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
+<<<<<<< HEAD
+=======
+	github.com/mattn/go-sqlite3 v1.14.47 // indirect
+>>>>>>> 90c46f770f2582ca6c2d103b433a1a70dc1620f9
 	golang.org/x/sync v0.8.0 // indirect
 	golang.org/x/text v0.19.0 // indirect
 )
