@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 	"pos-multi-branch/backend/internal/repository"
 
 	"github.com/google/uuid"
+	"github.com/jung-kurt/gofpdf"
 )
 
 type ReportHandler struct{}
@@ -106,6 +108,85 @@ func (h *ReportHandler) ProfitLoss(w http.ResponseWriter, r *http.Request) {
 	resp.Summary = summary
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// GET /api/v1/branches/{id}/reports/sales.pdf?start=&end=
+func (h *ReportHandler) SalesPDF(w http.ResponseWriter, r *http.Request) {
+	branchID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid branch id"})
+		return
+	}
+
+	start, end, err := parseTimeRange(r)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	data, err := repository.GetSalesPDFData(r.Context(), branchID, start, end)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	// ── Generate PDF with gofpdf ──
+	pdf := gofpdf.New("L", "mm", "A4", "")
+	pdf.SetMargins(10, 10, 10)
+	pdf.AddPage()
+
+	// Title
+	pdf.SetFont("Helvetica", "B", 16)
+	pdf.CellFormat(0, 12, fmt.Sprintf("Laporan Penjualan (%s - %s)",
+		start.Format("02 Jan 2006"), end.Format("02 Jan 2006")), "", 1, "C", false, 0, "")
+	pdf.Ln(6)
+
+	// ── Table header ──
+	colWidths := []float64{30, 55, 18, 25, 30, 25, 25}
+	headers := []string{"Tanggal", "Produk", "Qty", "Harga", "Subtotal", "Pajak", "Total"}
+
+	pdf.SetFont("Helvetica", "B", 9)
+	pdf.SetFillColor(68, 114, 196)
+	pdf.SetTextColor(255, 255, 255)
+	for i, h := range headers {
+		pdf.CellFormat(colWidths[i], 8, h, "1", 0, "C", true, 0, "")
+	}
+	pdf.Ln(-1)
+
+	// ── Table body ──
+	pdf.SetTextColor(30, 30, 30)
+	pdf.SetFont("Helvetica", "", 8)
+
+	var grandTotal float64
+	for _, row := range data {
+		pdf.CellFormat(colWidths[0], 7, row.Date[:10], "1", 0, "L", false, 0, "")
+		pdf.CellFormat(colWidths[1], 7, row.ProductName, "1", 0, "L", false, 0, "")
+		pdf.CellFormat(colWidths[2], 7, fmt.Sprintf("%d", row.Quantity), "1", 0, "C", false, 0, "")
+		pdf.CellFormat(colWidths[3], 7, fmt.Sprintf("%.0f", row.Price), "1", 0, "R", false, 0, "")
+		pdf.CellFormat(colWidths[4], 7, fmt.Sprintf("%.0f", row.Subtotal), "1", 0, "R", false, 0, "")
+		pdf.CellFormat(colWidths[5], 7, fmt.Sprintf("%.0f", row.TaxAmount), "1", 0, "R", false, 0, "")
+		pdf.CellFormat(colWidths[6], 7, fmt.Sprintf("%.0f", row.Total), "1", 0, "R", false, 0, "")
+		pdf.Ln(-1)
+		grandTotal = row.Total
+	}
+
+	// ── Grand total row ──
+	pdf.SetFont("Helvetica", "B", 9)
+	pdf.SetFillColor(220, 220, 220)
+	// Merge cells: colspan 6, then total
+	for i := 0; i < 6; i++ {
+		pdf.CellFormat(colWidths[i], 8, "", "1", 0, "", true, 0, "")
+	}
+	pdf.CellFormat(colWidths[6], 8, fmt.Sprintf("%.0f", grandTotal), "1", 1, "R", true, 0, "")
+
+	// ── Write response ──
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="sales_report_%s.pdf"`, start.Format("2006-01-02")))
+
+	if err := pdf.Output(w); err != nil {
+		// Headers already sent; can only log
+		_ = err
+	}
 }
 
 // ─── Helper ───

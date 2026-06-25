@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
+	"log"
 	"math"
 	"net/http"
 	"strconv"
@@ -9,6 +11,7 @@ import (
 	"pos-multi-branch/backend/internal/middleware"
 	"pos-multi-branch/backend/internal/model"
 	"pos-multi-branch/backend/internal/repository"
+	"pos-multi-branch/backend/internal/ws"
 
 	"github.com/google/uuid"
 )
@@ -34,8 +37,22 @@ func (h *TransactionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "at least one item required"})
 		return
 	}
-	if req.CashAmount <= 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cash_amount must be positive"})
+
+	// Payment method validation
+	paymentMethod := req.PaymentMethod
+	if paymentMethod == "" {
+		paymentMethod = "cash"
+	}
+	switch paymentMethod {
+	case "cash", "qris", "transfer", "edc":
+		// valid
+	default:
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "payment_method must be one of: cash, qris, transfer, edc"})
+		return
+	}
+
+	if paymentMethod == "cash" && req.CashAmount <= 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cash_amount must be positive for cash payment"})
 		return
 	}
 
@@ -101,13 +118,20 @@ func (h *TransactionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 	taxAmount := math.Round(afterDiscount*taxRate/100*100) / 100
 	total := math.Round((afterDiscount+taxAmount)*100) / 100
 
-	if req.CashAmount < total {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cash_amount is less than total"})
-		return
+	var changeAmount float64
+	if paymentMethod == "cash" {
+		if req.CashAmount < total {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cash_amount is less than total"})
+			return
+		}
+		changeAmount = math.Round((req.CashAmount-total)*100) / 100
+	} else {
+		// Non-cash: cash_amount = total, change = 0
+		req.CashAmount = total
+		changeAmount = 0
 	}
-	changeAmount := math.Round((req.CashAmount-total)*100) / 100
 
-	// ── Deduct stock & insert items in a loop (no pgx tx for simplicity) ──
+	// ── Deduct global stock (products table) ──
 	for _, ci := range req.Items {
 		if err := repository.DeductProductStock(r.Context(), ci.ProductID, ci.Quantity); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -115,20 +139,30 @@ func (h *TransactionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// ── Deduct branch-level stock (branch_products) ──
+	for _, ci := range req.Items {
+		if err := repository.DeductBranchProductStock(r.Context(), req.BranchID, ci.ProductID, float64(ci.Quantity)); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "branch stock: " + err.Error()})
+			return
+		}
+	}
+
 	// ── Create transaction ──
 	now := r.Context()
 	tx := &model.Transaction{
-		BranchID:        req.BranchID,
-		UserID:          userID,
-		CustomerName:    req.CustomerName,
-		Subtotal:        subtotal,
-		DiscountPercent: discountPercent,
-		DiscountAmount:  discountAmount,
-		TaxRate:         taxRate,
-		TaxAmount:       taxAmount,
-		Total:           total,
-		CashAmount:      req.CashAmount,
-		ChangeAmount:    changeAmount,
+		BranchID:         req.BranchID,
+		UserID:           userID,
+		CustomerName:     req.CustomerName,
+		Subtotal:         subtotal,
+		DiscountPercent:  discountPercent,
+		DiscountAmount:   discountAmount,
+		TaxRate:          taxRate,
+		TaxAmount:        taxAmount,
+		Total:            total,
+		CashAmount:       req.CashAmount,
+		ChangeAmount:     changeAmount,
+		PaymentMethod:    paymentMethod,
+		PaymentReference: req.PaymentReference,
 	}
 
 	if err := repository.CreateTransaction(now, tx); err != nil {
@@ -147,6 +181,9 @@ func (h *TransactionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 
 	tx.Items = items
 	writeJSON(w, http.StatusCreated, tx)
+
+	// ── Check & broadcast low stock via WebSocket ──
+	go checkAndBroadcastLowStock(r.Context(), req.BranchID)
 }
 
 func (h *TransactionHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -191,6 +228,29 @@ func (h *TransactionHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 }
 
 // ─── JSON Helper ───
+
+// checkAndBroadcastLowStock queries low-stock items for the branch and broadcasts
+// a stock.low event via WebSocket if any products are below their min_stock threshold.
+func checkAndBroadcastLowStock(ctx context.Context, branchID uuid.UUID) {
+	lowStock, err := repository.GetLowStockProductsByMinStock(ctx, branchID)
+	if err != nil {
+		log.Printf("[stock] failed to check low stock: %v", err)
+		return
+	}
+	if len(lowStock) == 0 {
+		return
+	}
+	if ws.DefaultHub != nil {
+		ws.DefaultHub.BroadcastEvent(ws.Event{
+			Type: ws.EventStockLow,
+			Payload: map[string]interface{}{
+				"branch_id": branchID.String(),
+				"items":     lowStock,
+			},
+		})
+		log.Printf("[stock] low stock alert broadcast for branch %s (%d items)", branchID.String(), len(lowStock))
+	}
+}
 
 // writeJSON writes a JSON response safely, preventing panics from encoder failures.
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {

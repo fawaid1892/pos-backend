@@ -84,9 +84,11 @@ func main() {
 	protected.HandleFunc("POST /api/v1/branches/{id}/inventory/adjustment", stockH.Adjustment)
 	protected.HandleFunc("POST /api/v1/inventory/transfer", stockH.Transfer)
 	protected.HandleFunc("GET /api/v1/branches/{id}/inventory", stockH.ListInventory)
+	protected.HandleFunc("GET /api/v1/branches/{id}/inventory/low-stock", stockH.LowStock)
 
 	// Reports
 	protected.HandleFunc("GET /api/v1/branches/{id}/reports/sales", reportH.Sales)
+	protected.HandleFunc("GET /api/v1/branches/{id}/reports/sales.pdf", reportH.SalesPDF)
 	protected.HandleFunc("GET /api/v1/branches/{id}/reports/stock", reportH.Stock)
 	protected.HandleFunc("GET /api/v1/branches/{id}/reports/profit-loss", reportH.ProfitLoss)
 

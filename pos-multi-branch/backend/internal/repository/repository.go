@@ -291,13 +291,14 @@ func CreateTransaction(ctx context.Context, txData *model.Transaction) error {
 	return database.Pool.QueryRow(ctx,
 		`INSERT INTO transactions (branch_id, user_id, customer_name, subtotal,
 		                           discount_percent, discount_amount, tax_rate, tax_amount, total,
-		                           cash_amount, change_amount)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+		                           cash_amount, change_amount, payment_method, payment_reference)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
 		 RETURNING id, created_at`,
 		txData.BranchID, txData.UserID, txData.CustomerName,
 		txData.Subtotal, txData.DiscountPercent, txData.DiscountAmount,
 		txData.TaxRate, txData.TaxAmount,
 		txData.Total, txData.CashAmount, txData.ChangeAmount,
+		txData.PaymentMethod, txData.PaymentReference,
 	).Scan(&txData.ID, &txData.CreatedAt)
 }
 
@@ -324,6 +325,20 @@ func DeductProductStock(ctx context.Context, productID uuid.UUID, qty int) error
 	return nil
 }
 
+func DeductBranchProductStock(ctx context.Context, branchID, productID uuid.UUID, qty float64) error {
+	tag, err := database.Pool.Exec(ctx,
+		`UPDATE branch_products SET stock_qty = stock_qty - $1, updated_at = NOW()
+		 WHERE branch_id = $2 AND product_id = $3 AND stock_qty >= $1`,
+		qty, branchID, productID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return errors.New("insufficient stock in this branch or product not found")
+	}
+	return nil
+}
+
 func ListTransactions(ctx context.Context, branchID *uuid.UUID, limit, offset int) ([]model.Transaction, error) {
 	where := ""
 	args := []interface{}{}
@@ -343,7 +358,9 @@ func ListTransactions(ctx context.Context, branchID *uuid.UUID, limit, offset in
 		SELECT t.id, t.branch_id, t.user_id, t.customer_name,
 		       t.subtotal, t.discount_percent, t.discount_amount,
 		       t.tax_rate, t.tax_amount,
-		       t.total, t.cash_amount, t.change_amount, t.created_at
+		       t.total, t.cash_amount, t.change_amount,
+		       COALESCE(t.payment_method, 'cash'), COALESCE(t.payment_reference, ''),
+		       t.created_at
 		FROM transactions t%s
 		ORDER BY t.created_at DESC
 		LIMIT $%d OFFSET $%d`, where, argIdx, argIdx+1)
@@ -361,7 +378,8 @@ func ListTransactions(ctx context.Context, branchID *uuid.UUID, limit, offset in
 		if err := rows.Scan(&tx.ID, &tx.BranchID, &tx.UserID, &tx.CustomerName,
 			&tx.Subtotal, &tx.DiscountPercent, &tx.DiscountAmount,
 			&tx.TaxRate, &tx.TaxAmount,
-			&tx.Total, &tx.CashAmount, &tx.ChangeAmount, &tx.CreatedAt); err != nil {
+			&tx.Total, &tx.CashAmount, &tx.ChangeAmount,
+			&tx.PaymentMethod, &tx.PaymentReference, &tx.CreatedAt); err != nil {
 			return nil, err
 		}
 		txs = append(txs, tx)
@@ -375,12 +393,15 @@ func GetTransactionByID(ctx context.Context, id uuid.UUID) (*model.Transaction, 
 		`SELECT id, branch_id, user_id, customer_name,
 		        subtotal, discount_percent, discount_amount,
 		        tax_rate, tax_amount,
-		        total, cash_amount, change_amount, created_at
+		        total, cash_amount, change_amount,
+		        COALESCE(payment_method, 'cash'), COALESCE(payment_reference, ''),
+		        created_at
 		 FROM transactions WHERE id = $1`, id,
 	).Scan(&tx.ID, &tx.BranchID, &tx.UserID, &tx.CustomerName,
 		&tx.Subtotal, &tx.DiscountPercent, &tx.DiscountAmount,
 		&tx.TaxRate, &tx.TaxAmount,
-		&tx.Total, &tx.CashAmount, &tx.ChangeAmount, &tx.CreatedAt)
+		&tx.Total, &tx.CashAmount, &tx.ChangeAmount,
+		&tx.PaymentMethod, &tx.PaymentReference, &tx.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -614,7 +635,7 @@ func GetStockReport(ctx context.Context, branchID uuid.UUID) ([]model.StockRepor
 	rows, err := database.Pool.Query(ctx,
 		`SELECT bp.product_id, p.name, p.barcode,
 		        COALESCE(c.name, '') as category_name,
-		        bp.stock_qty,
+		        bp.stock_qty, COALESCE(bp.min_stock, 0),
 		        (SELECT MAX(sm.created_at) FROM stock_mutations sm WHERE sm.branch_id = bp.branch_id AND sm.product_id = bp.product_id) as last_mutation
 		 FROM branch_products bp
 		 JOIN products p ON p.id = bp.product_id
@@ -631,7 +652,7 @@ func GetStockReport(ctx context.Context, branchID uuid.UUID) ([]model.StockRepor
 	for rows.Next() {
 		var r model.StockReportRow
 		if err := rows.Scan(&r.ProductID, &r.ProductName, &r.Barcode,
-			&r.CategoryName, &r.CurrentStock, &r.LastMutation); err != nil {
+			&r.CategoryName, &r.CurrentStock, &r.MinStock, &r.LastMutation); err != nil {
 			return nil, err
 		}
 		items = append(items, r)
@@ -712,4 +733,84 @@ func GetSalesExportData(ctx context.Context, branchID uuid.UUID, start, end time
 		data = append(data, r)
 	}
 	return data, nil
+}
+
+// ─── Low Stock ───
+
+func GetLowStockProducts(ctx context.Context, branchID uuid.UUID, threshold float64) ([]model.LowStockItem, error) {
+	rows, err := database.Pool.Query(ctx,
+		`SELECT p.name, b.name, bp.stock_qty, COALESCE(bp.min_stock, 0)
+		 FROM branch_products bp
+		 JOIN products p ON p.id = bp.product_id
+		 JOIN branches b ON b.id = bp.branch_id
+		 WHERE bp.branch_id = $1 AND bp.stock_qty <= $2
+		 ORDER BY bp.stock_qty ASC`,
+		branchID, threshold)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []model.LowStockItem
+	for rows.Next() {
+		var r model.LowStockItem
+		if err := rows.Scan(&r.ProductName, &r.BranchName, &r.StockQty, &r.MinStock); err != nil {
+			return nil, err
+		}
+		items = append(items, r)
+	}
+	return items, nil
+}
+
+func GetLowStockProductsByMinStock(ctx context.Context, branchID uuid.UUID) ([]model.LowStockItem, error) {
+	rows, err := database.Pool.Query(ctx,
+		`SELECT p.name, b.name, bp.stock_qty, COALESCE(bp.min_stock, 0)
+		 FROM branch_products bp
+		 JOIN products p ON p.id = bp.product_id
+		 JOIN branches b ON b.id = bp.branch_id
+		 WHERE bp.branch_id = $1 AND bp.min_stock > 0 AND bp.stock_qty <= bp.min_stock
+		 ORDER BY bp.stock_qty ASC`,
+		branchID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []model.LowStockItem
+	for rows.Next() {
+		var r model.LowStockItem
+		if err := rows.Scan(&r.ProductName, &r.BranchName, &r.StockQty, &r.MinStock); err != nil {
+			return nil, err
+		}
+		items = append(items, r)
+	}
+	return items, nil
+}
+
+// ─── PDF Sales Data ───
+
+func GetSalesPDFData(ctx context.Context, branchID uuid.UUID, start, end time.Time) ([]model.SalesPDFRow, error) {
+	pgRows, err := database.Pool.Query(ctx,
+		`SELECT t.created_at::TEXT as tanggal,
+		        ti.product_name, ti.quantity, ti.price,
+		        ti.subtotal, t.tax_amount, t.total
+		 FROM transactions t
+		 JOIN transaction_items ti ON ti.transaction_id = t.id
+		 WHERE t.branch_id = $1 AND t.created_at >= $2 AND t.created_at < $3
+		 ORDER BY t.created_at DESC, ti.product_name`,
+		branchID, start, end)
+	if err != nil {
+		return nil, err
+	}
+	defer pgRows.Close()
+
+	var items []model.SalesPDFRow
+	for pgRows.Next() {
+		var r model.SalesPDFRow
+		if err := pgRows.Scan(&r.Date, &r.ProductName, &r.Quantity, &r.Price, &r.Subtotal, &r.TaxAmount, &r.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, r)
+	}
+	return items, nil
 }
