@@ -41,6 +41,17 @@ func (h *TransactionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 
 	userID := middleware.GetUserID(r.Context())
 
+	// ── Fetch branch config for tax_rate ──
+	branch, err := repository.GetBranchByID(r.Context(), req.BranchID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch branch: " + err.Error()})
+		return
+	}
+	if branch == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "branch not found"})
+		return
+	}
+
 	// ── Build transaction items & calculate subtotal ──
 	var items []model.TransactionItem
 	var subtotal float64
@@ -80,8 +91,15 @@ func (h *TransactionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 	if discountPercent > 100 {
 		discountPercent = 100
 	}
+	taxRate := branch.TaxRate
+	if taxRate < 0 {
+		taxRate = 0
+	}
+
 	discountAmount := math.Round(subtotal*discountPercent/100*100) / 100
-	total := math.Round((subtotal-discountAmount)*100) / 100
+	afterDiscount := math.Round((subtotal-discountAmount)*100) / 100
+	taxAmount := math.Round(afterDiscount*taxRate/100*100) / 100
+	total := math.Round((afterDiscount+taxAmount)*100) / 100
 
 	if req.CashAmount < total {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "cash_amount is less than total"})
@@ -106,6 +124,8 @@ func (h *TransactionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 		Subtotal:        subtotal,
 		DiscountPercent: discountPercent,
 		DiscountAmount:  discountAmount,
+		TaxRate:         taxRate,
+		TaxAmount:       taxAmount,
 		Total:           total,
 		CashAmount:      req.CashAmount,
 		ChangeAmount:    changeAmount,
