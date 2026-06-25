@@ -167,6 +167,10 @@ class _DeadLetterQueuePanelState extends State<DeadLetterQueuePanel> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final colorScheme = theme.colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -182,7 +186,7 @@ class _DeadLetterQueuePanelState extends State<DeadLetterQueuePanel> {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: Colors.red.shade800,
+                  color: isDark ? Colors.red.shade300 : Colors.red.shade800,
                 ),
               ),
               if (!_isLoading && _failedItems.isNotEmpty)
@@ -191,7 +195,7 @@ class _DeadLetterQueuePanelState extends State<DeadLetterQueuePanel> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                   decoration: BoxDecoration(
-                    color: Colors.red.shade100,
+                    color: isDark ? Colors.red.shade800 : Colors.red.shade100,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -199,14 +203,14 @@ class _DeadLetterQueuePanelState extends State<DeadLetterQueuePanel> {
                     style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
-                        color: Colors.red.shade800),
+                        color: isDark ? Colors.red.shade200 : Colors.red.shade800),
                   ),
                 ),
               const Spacer(),
-              // Clear actions
               if (_failedItems.isNotEmpty) ...[
                 IconButton(
-                  icon: const Icon(Icons.clean_hands, size: 18),
+                  icon: Icon(Icons.clean_hands, size: 18,
+                      color: isDark ? Colors.grey.shade400 : null),
                   tooltip: 'Clear old items (>7d)',
                   onPressed: _clearOld,
                   constraints: const BoxConstraints(),
@@ -223,7 +227,8 @@ class _DeadLetterQueuePanelState extends State<DeadLetterQueuePanel> {
                 ),
               ],
               IconButton(
-                icon: const Icon(Icons.refresh, size: 18),
+                icon: Icon(Icons.refresh, size: 18,
+                    color: isDark ? Colors.grey.shade400 : null),
                 tooltip: 'Refresh',
                 onPressed: _isLoading ? null : _loadFailedItems,
                 constraints: const BoxConstraints(),
@@ -242,22 +247,29 @@ class _DeadLetterQueuePanelState extends State<DeadLetterQueuePanel> {
             ),
           )
         else if (_failedItems.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
             child: Center(
               child: Column(
                 children: [
                   Icon(Icons.check_circle_outline,
-                      size: 40, color: Colors.green),
-                  SizedBox(height: 8),
+                      size: 40,
+                      color: isDark ? Colors.green.shade300 : Colors.green),
+                  const SizedBox(height: 8),
                   Text(
                     'No failed items',
-                    style: TextStyle(color: Colors.grey, fontSize: 14),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
                   ),
-                  SizedBox(height: 4),
+                  const SizedBox(height: 4),
                   Text(
                     'All sync items processed successfully',
-                    style: TextStyle(color: Colors.grey, fontSize: 12),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colorScheme.onSurfaceVariant.withOpacity(0.7),
+                    ),
                   ),
                 ],
               ),
@@ -266,6 +278,7 @@ class _DeadLetterQueuePanelState extends State<DeadLetterQueuePanel> {
         else
           ..._failedItems.map((item) => _FailedItemTile(
                 item: item,
+                isDark: isDark,
                 onRetry: () => _retryItem(item['id'] as int),
                 onDismiss: () => _dismissItem(item['id'] as int),
               )),
@@ -277,11 +290,13 @@ class _DeadLetterQueuePanelState extends State<DeadLetterQueuePanel> {
 /// Tile for a single failed sync queue item.
 class _FailedItemTile extends StatelessWidget {
   final Map<String, dynamic> item;
+  final bool isDark;
   final VoidCallback onRetry;
   final VoidCallback onDismiss;
 
   const _FailedItemTile({
     required this.item,
+    required this.isDark,
     required this.onRetry,
     required this.onDismiss,
   });
@@ -294,7 +309,6 @@ class _FailedItemTile extends StatelessWidget {
     final recordId = item['record_id'] as String? ?? '?';
     final action = item['action'] as String? ?? '?';
 
-    // Parse payload for preview
     String payloadPreview = '';
     try {
       final payloadStr = item['payload'] as String? ?? '';
@@ -313,20 +327,26 @@ class _FailedItemTile extends StatelessWidget {
       }
     } catch (_) {}
 
-    final theme = Theme.of(context);
+    final cardColor = isDark ? Colors.red.shade900.withOpacity(0.3) : Colors.red.shade50;
+    final avatarColor = isDark ? Colors.red.shade800 : Colors.red.shade100;
+    final avatarIconColor = isDark ? Colors.red.shade300 : Colors.red.shade700;
+    final titleColor = isDark ? Colors.red.shade200 : null;
+    final errorColor = isDark ? Colors.red.shade300 : Colors.red.shade600;
+    final dateColor = isDark ? Colors.grey.shade600 : Colors.grey.shade400;
+    final previewColor = isDark ? Colors.grey.shade400 : Colors.grey.shade600;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      color: Colors.red.shade50,
+      color: cardColor,
       child: ListTile(
         contentPadding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
         leading: CircleAvatar(
           radius: 16,
-          backgroundColor: Colors.red.shade100,
+          backgroundColor: avatarColor,
           child: Icon(
             action == 'delete' ? Icons.delete_outline : Icons.cloud_off,
             size: 18,
-            color: Colors.red.shade700,
+            color: avatarIconColor,
           ),
         ),
         title: Row(
@@ -334,8 +354,11 @@ class _FailedItemTile extends StatelessWidget {
             Flexible(
               child: Text(
                 '$tableName/$recordId',
-                style: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: titleColor,
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -343,7 +366,7 @@ class _FailedItemTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
               decoration: BoxDecoration(
-                color: Colors.red.shade200,
+                color: isDark ? Colors.red.shade700 : Colors.red.shade200,
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
@@ -351,7 +374,7 @@ class _FailedItemTile extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 9,
                   fontWeight: FontWeight.bold,
-                  color: Colors.red.shade900,
+                  color: isDark ? Colors.red.shade100 : Colors.red.shade900,
                 ),
               ),
             ),
@@ -363,20 +386,20 @@ class _FailedItemTile extends StatelessWidget {
             if (payloadPreview.isNotEmpty)
               Text(
                 payloadPreview,
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                style: TextStyle(fontSize: 11, color: previewColor),
                 overflow: TextOverflow.ellipsis,
               ),
             const SizedBox(height: 2),
             Row(
               children: [
-                Icon(Icons.error_outline, size: 11, color: Colors.red.shade400),
+                Icon(Icons.error_outline, size: 11, color: errorColor),
                 const SizedBox(width: 3),
                 Expanded(
                   child: Text(
                     errorMsg,
                     style: TextStyle(
                       fontSize: 11,
-                      color: Colors.red.shade600,
+                      color: errorColor,
                       fontStyle: FontStyle.italic,
                     ),
                     overflow: TextOverflow.ellipsis,
@@ -388,22 +411,22 @@ class _FailedItemTile extends StatelessWidget {
             const SizedBox(height: 2),
             Text(
               createdDate,
-              style: TextStyle(fontSize: 10, color: Colors.grey.shade400),
+              style: TextStyle(fontSize: 10, color: dateColor),
             ),
           ],
         ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Retry button
             IconButton(
-              icon: Icon(Icons.replay, size: 20, color: Colors.orange.shade700),
+              icon: Icon(Icons.replay, size: 20,
+                  color: isDark ? Colors.orange.shade300 : Colors.orange.shade700),
               tooltip: 'Retry sync',
               onPressed: onRetry,
             ),
-            // Dismiss button
             IconButton(
-              icon: Icon(Icons.close, size: 18, color: Colors.grey.shade500),
+              icon: Icon(Icons.close, size: 18,
+                  color: isDark ? Colors.grey.shade500 : Colors.grey.shade500),
               tooltip: 'Dismiss',
               onPressed: onDismiss,
             ),

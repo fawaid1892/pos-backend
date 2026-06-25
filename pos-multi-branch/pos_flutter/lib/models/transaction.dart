@@ -46,6 +46,8 @@ class Transaction {
   final List<TransactionItem> items;
   final double total;
   final double discountTotal;
+  final double taxRate;
+  final double taxAmount;
   final double grandTotal;
   final String paymentMethod;
   final double amountPaid;
@@ -61,6 +63,8 @@ class Transaction {
     required this.items,
     required this.total,
     this.discountTotal = 0.0,
+    this.taxRate = 0.0,
+    this.taxAmount = 0.0,
     required this.grandTotal,
     required this.paymentMethod,
     required this.amountPaid,
@@ -77,6 +81,8 @@ class Transaction {
         'items': items.map((i) => i.toJson()).toList(),
         'total': total,
         'discountTotal': discountTotal,
+        'taxRate': taxRate,
+        'taxAmount': taxAmount,
         'grandTotal': grandTotal,
         'paymentMethod': paymentMethod,
         'amountPaid': amountPaid,
@@ -95,6 +101,8 @@ class Transaction {
             .toList(),
         total: (json['total'] as num).toDouble(),
         discountTotal: (json['discountTotal'] as num?)?.toDouble() ?? 0.0,
+        taxRate: (json['taxRate'] as num?)?.toDouble() ?? 0.0,
+        taxAmount: (json['taxAmount'] as num?)?.toDouble() ?? 0.0,
         grandTotal: (json['grandTotal'] as num).toDouble(),
         paymentMethod: json['paymentMethod'] as String,
         amountPaid: (json['amountPaid'] as num).toDouble(),

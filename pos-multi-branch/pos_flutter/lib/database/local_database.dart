@@ -21,7 +21,7 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       onConfigure: _onConfigure,
@@ -122,6 +122,8 @@ class LocalDatabase {
         cashier_name TEXT NOT NULL,
         total REAL NOT NULL DEFAULT 0,
         discount_total REAL NOT NULL DEFAULT 0,
+        tax_rate REAL NOT NULL DEFAULT 0,
+        tax_amount REAL NOT NULL DEFAULT 0,
         grand_total REAL NOT NULL DEFAULT 0,
         payment_method TEXT NOT NULL DEFAULT 'Tunai',
         amount_paid REAL NOT NULL DEFAULT 0,
@@ -213,7 +215,11 @@ class LocalDatabase {
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Handle future migrations here
+    if (oldVersion < 2) {
+      // Add tax columns to transactions
+      await db.execute('ALTER TABLE transactions ADD COLUMN tax_rate REAL NOT NULL DEFAULT 0');
+      await db.execute('ALTER TABLE transactions ADD COLUMN tax_amount REAL NOT NULL DEFAULT 0');
+    }
   }
 
   /// Drop and recreate all tables (for testing/reset).

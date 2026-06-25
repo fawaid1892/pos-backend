@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/report_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/theme_provider.dart';
+import '../utils/responsive.dart';
 
 class ExportScreen extends StatefulWidget {
   const ExportScreen({super.key});
@@ -122,13 +124,26 @@ class _ExportScreenState extends State<ExportScreen> {
   @override
   Widget build(BuildContext context) {
     final reportProv = context.watch<ReportProvider>();
+    final colorScheme = Theme.of(context).colorScheme;
+    final isTablet = context.isTablet;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Export Laporan'),
+        actions: [
+          Consumer<ThemeProvider>(
+            builder: (context, themeProv, _) => IconButton(
+              icon: Icon(
+                themeProv.isDarkMode ? Icons.light_mode : Icons.dark_mode,
+              ),
+              onPressed: () => themeProv.toggleTheme(),
+              tooltip: 'Toggle Dark Mode',
+            ),
+          ),
+        ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(isTablet ? 24 : 16),
         children: [
           // Report type
           const Text('Jenis Laporan',
@@ -137,18 +152,15 @@ class _ExportScreenState extends State<ExportScreen> {
           ...['sales', 'stock', 'profit_loss'].map((type) {
             final selected = _selectedReportType == type;
             return Card(
-              color: selected
-                  ? Theme.of(context).colorScheme.primaryContainer
-                  : null,
+              color: selected ? colorScheme.primaryContainer : null,
               child: RadioListTile<String>(
                 title: Row(
                   children: [
                     Icon(
                       _reportTypeIcon(type),
                       size: 20,
-                      color: selected
-                          ? Theme.of(context).colorScheme.primary
-                          : null,
+                      color:
+                          selected ? colorScheme.primary : null,
                     ),
                     const SizedBox(width: 8),
                     Text(_reportTypeLabel(type)),
@@ -234,8 +246,8 @@ class _ExportScreenState extends State<ExportScreen> {
                 style: const TextStyle(fontSize: 16),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Colors.white,
+                backgroundColor: colorScheme.primary,
+                foregroundColor: colorScheme.onPrimary,
               ),
             ),
           ),
@@ -251,10 +263,14 @@ class _ExportScreenState extends State<ExportScreen> {
     required bool selected,
     required VoidCallback onTap,
   }) {
+    final brightness = Theme.of(context).brightness;
+
     return GestureDetector(
       onTap: onTap,
       child: Card(
-        color: selected ? color.withOpacity(0.1) : null,
+        color: selected
+            ? color.withOpacity(0.1)
+            : null,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: BorderSide(
@@ -266,12 +282,15 @@ class _ExportScreenState extends State<ExportScreen> {
           padding: const EdgeInsets.symmetric(vertical: 20),
           child: Column(
             children: [
-              Icon(icon, color: selected ? color : Colors.grey, size: 40),
+              Icon(icon,
+                  color: selected ? color : Colors.grey,
+                  size: 40),
               const SizedBox(height: 8),
               Text(
                 label,
                 style: TextStyle(
-                  fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                  fontWeight:
+                      selected ? FontWeight.bold : FontWeight.normal,
                   color: selected ? color : Colors.grey,
                 ),
               ),

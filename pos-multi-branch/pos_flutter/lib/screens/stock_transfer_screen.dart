@@ -3,7 +3,11 @@ import 'package:provider/provider.dart';
 import '../models/stock_adjustment.dart';
 import '../models/branch.dart';
 import '../providers/stock_provider.dart';
-import '../services/mock_stock_service.dart';
+import '../providers/theme_provider.dart';
+import '../services/stock_service.dart';
+import '../widgets/shimmer_loading.dart';
+import '../widgets/error_state_widget.dart';
+import '../utils/responsive.dart';
 
 class StockTransferScreen extends StatefulWidget {
   final ProductStock? initialProduct;
@@ -18,7 +22,7 @@ class _StockTransferScreenState extends State<StockTransferScreen> {
   final _formKey = GlobalKey<FormState>();
   final _quantityController = TextEditingController();
 
-  final MockStockService _stockService = MockStockService();
+  final StockService _stockService = StockService();
 
   String? _sourceBranchId;
   String? _targetBranchId;
@@ -28,6 +32,7 @@ class _StockTransferScreenState extends State<StockTransferScreen> {
   List<ProductStock> _sourceProducts = [];
   bool _isLoadingBranches = true;
   bool _isLoadingProducts = false;
+  String? _loadError;
 
   @override
   void initState() {
@@ -43,31 +48,50 @@ class _StockTransferScreenState extends State<StockTransferScreen> {
 
   Future<void> _loadBranches() async {
     setState(() {
-      _branches = _stockService.getBranches();
-      _isLoadingBranches = false;
+      _isLoadingBranches = true;
+      _loadError = null;
     });
+    try {
+      final branches = await _stockService.getBranches();
+      if (!mounted) return;
+      setState(() {
+        _branches = branches;
+        _isLoadingBranches = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingBranches = false;
+        _loadError = e.toString();
+      });
+    }
   }
 
   Future<void> _loadSourceProducts() async {
     if (_sourceBranchId == null) return;
     setState(() => _isLoadingProducts = true);
 
-    final items = await _stockService.getInventory(_sourceBranchId!);
-    if (!mounted) return;
-    setState(() {
-      _sourceProducts = items;
-      _selectedProductId = null;
-      _isLoadingProducts = false;
-      // Pre-select if applicable
-      if (widget.initialProduct != null) {
-        final match = _sourceProducts
-            .where((p) => p.productId == widget.initialProduct!.productId)
-            .toList();
-        if (match.isNotEmpty) {
-          _selectedProductId = match.first.productId;
+    try {
+      final items = await _stockService.getInventory(_sourceBranchId!);
+      if (!mounted) return;
+      setState(() {
+        _sourceProducts = items;
+        _selectedProductId = null;
+        _isLoadingProducts = false;
+        // Pre-select if applicable
+        if (widget.initialProduct != null) {
+          final match = _sourceProducts
+              .where((p) => p.productId == widget.initialProduct!.productId)
+              .toList();
+          if (match.isNotEmpty) {
+            _selectedProductId = match.first.productId;
+          }
         }
-      }
-    });
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoadingProducts = false);
+    }
   }
 
   List<Branch> get _availableTargetBranches {
@@ -121,231 +145,265 @@ class _StockTransferScreenState extends State<StockTransferScreen> {
   @override
   Widget build(BuildContext context) {
     final stockProv = context.watch<StockProvider>();
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Transfer Antar Cabang'),
+        actions: [
+          Consumer<ThemeProvider>(
+            builder: (context, themeProv, _) => IconButton(
+              icon: Icon(
+                themeProv.isDarkMode ? Icons.light_mode : Icons.dark_mode,
+              ),
+              onPressed: () => themeProv.toggleTheme(),
+              tooltip: 'Toggle Dark Mode',
+            ),
+          ),
+        ],
       ),
       body: _isLoadingBranches
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+          ? const ShimmerPage(itemCount: 4)
+          : _loadError != null
+              ? ErrorStateWidget(
+                  message: _loadError!,
+                  title: 'Gagal memuat cabang',
+                  onRetry: _loadBranches,
+                )
+              : _buildForm(stockProv, colorScheme),
+    );
+  }
+
+  Widget _buildForm(StockProvider stockProv, ColorScheme colorScheme) {
+    final isTablet = context.isTablet;
+
+    return SingleChildScrollView(
+      padding: EdgeInsets.all(isTablet ? 24 : 16),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Source branch selector
+            _buildSection('Cabang Asal', [
+              DropdownButtonFormField<String>(
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  prefixIcon: const Icon(Icons.store),
+                  hintText: 'Pilih cabang asal',
+                  filled: true,
+                  fillColor: colorScheme.surfaceVariant,
+                ),
+                value: _sourceBranchId,
+                items: _branches.map((b) {
+                  return DropdownMenuItem(
+                    value: b.id,
+                    child: Text(b.name),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  setState(() {
+                    _sourceBranchId = val;
+                    _targetBranchId = null;
+                  });
+                  _loadSourceProducts();
+                },
+                validator: (val) =>
+                    val == null ? 'Pilih cabang asal' : null,
+              ),
+            ]),
+
+            const SizedBox(height: 16),
+
+            // Target branch selector
+            _buildSection('Cabang Tujuan', [
+              DropdownButtonFormField<String>(
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  prefixIcon: const Icon(Icons.store_mall_directory),
+                  hintText: 'Pilih cabang tujuan',
+                  filled: true,
+                  fillColor: colorScheme.surfaceVariant,
+                ),
+                value: _targetBranchId,
+                items: _availableTargetBranches.map((b) {
+                  return DropdownMenuItem(
+                    value: b.id,
+                    child: Text(b.name),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  setState(() => _targetBranchId = val);
+                },
+                validator: (val) =>
+                    val == null ? 'Pilih cabang tujuan' : null,
+              ),
+            ]),
+
+            const SizedBox(height: 16),
+
+            // Arrow visual
+            if (_sourceBranchId != null && _targetBranchId != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Source branch selector
-                    _buildSection('Cabang Asal', [
-                      DropdownButtonFormField<String>(
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.store),
-                          hintText: 'Pilih cabang asal',
-                        ),
-                        value: _sourceBranchId,
-                        items: _branches.map((b) {
-                          return DropdownMenuItem(
-                            value: b.id,
-                            child: Text(b.name),
-                          );
-                        }).toList(),
-                        onChanged: (val) {
-                          setState(() {
-                            _sourceBranchId = val;
-                            _targetBranchId = null;
-                          });
-                          _loadSourceProducts();
-                        },
-                        validator: (val) =>
-                            val == null ? 'Pilih cabang asal' : null,
-                      ),
-                    ]),
-
-                    const SizedBox(height: 16),
-
-                    // Target branch selector
-                    _buildSection('Cabang Tujuan', [
-                      DropdownButtonFormField<String>(
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.store_mall_directory),
-                          hintText: 'Pilih cabang tujuan',
-                        ),
-                        value: _targetBranchId,
-                        items: _availableTargetBranches.map((b) {
-                          return DropdownMenuItem(
-                            value: b.id,
-                            child: Text(b.name),
-                          );
-                        }).toList(),
-                        onChanged: (val) {
-                          setState(() => _targetBranchId = val);
-                        },
-                        validator: (val) =>
-                            val == null ? 'Pilih cabang tujuan' : null,
-                      ),
-                    ]),
-
-                    const SizedBox(height: 16),
-
-                    // Arrow visual
-                    if (_sourceBranchId != null && _targetBranchId != null)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              _branches
-                                      .firstWhere(
-                                          (b) => b.id == _sourceBranchId)
-                                      .name,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w500),
-                            ),
-                            const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 12),
-                              child: Icon(Icons.arrow_forward,
-                                  color: Colors.blue, size: 32),
-                            ),
-                            Text(
-                              _branches
-                                      .firstWhere(
-                                          (b) => b.id == _targetBranchId)
-                                      .name,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w500),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                    const SizedBox(height: 16),
-
-                    // Product selector
-                    _buildSection('Produk', [
-                      if (_sourceBranchId == null)
-                        const Padding(
-                          padding: EdgeInsets.all(12),
-                          child: Text(
-                            'Pilih cabang asal terlebih dahulu',
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                        )
-                      else if (_isLoadingProducts)
-                        const Center(child: CircularProgressIndicator())
-                      else
-                        DropdownButtonFormField<String>(
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            prefixIcon: Icon(Icons.inventory_2),
-                            hintText: 'Pilih produk',
-                          ),
-                          value: _selectedProductId,
-                          items: _sourceProducts.map((p) {
-                            return DropdownMenuItem(
-                              value: p.productId,
-                              child: Text(
-                                '${p.productName} (stok: ${p.currentStock})',
-                              ),
-                            );
-                          }).toList(),
-                          onChanged: (val) {
-                            setState(() => _selectedProductId = val);
-                          },
-                          validator: (val) =>
-                              val == null ? 'Pilih produk' : null,
-                        ),
-                    ]),
-
-                    const SizedBox(height: 16),
-
-                    // Quantity input
-                    _buildSection('Jumlah', [
-                      TextFormField(
-                        controller: _quantityController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          hintText: 'Masukkan jumlah transfer',
-                          prefixIcon: Icon(Icons.numbers),
-                        ),
-                        validator: (val) {
-                          if (val == null || val.trim().isEmpty) {
-                            return 'Masukkan jumlah';
-                          }
-                          final qty = int.tryParse(val.trim());
-                          if (qty == null || qty <= 0) {
-                            return 'Jumlah harus lebih dari 0';
-                          }
-                          if (_selectedProductId != null) {
-                            final product = _sourceProducts.firstWhere(
-                              (p) => p.productId == _selectedProductId,
-                            );
-                            if (qty > product.currentStock) {
-                              return 'Stok tidak mencukupi (sisa: ${product.currentStock})';
-                            }
-                          }
-                          return null;
-                        },
-                      ),
-                    ]),
-
-                    const SizedBox(height: 24),
-
-                    // Current stock info
-                    if (_selectedProductId != null && _sourceProducts.isNotEmpty)
-                      Card(
-                        color: Colors.blue.shade50,
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.info_outline,
-                                  color: Colors.blue),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Stok saat ini: ${_sourceProducts.firstWhere((p) => p.productId == _selectedProductId!).currentStock}',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w500),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                    const SizedBox(height: 24),
-
-                    // Submit button
-                    SizedBox(
-                      height: 48,
-                      child: ElevatedButton.icon(
-                        onPressed:
-                            stockProv.isSubmittingTransfer ? null : _submit,
-                        icon: stockProv.isSubmittingTransfer
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.swap_horiz),
-                        label: Text(
-                          stockProv.isSubmittingTransfer
-                              ? 'Memproses Transfer...'
-                              : 'Proses Transfer',
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
+                    Text(
+                      _branches
+                          .firstWhere((b) => b.id == _sourceBranchId)
+                          .name,
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child:
+                          Icon(Icons.arrow_forward, color: Colors.blue, size: 32),
+                    ),
+                    Text(
+                      _branches
+                          .firstWhere((b) => b.id == _targetBranchId)
+                          .name,
+                      style: const TextStyle(fontWeight: FontWeight.w500),
                     ),
                   ],
                 ),
               ),
+
+            const SizedBox(height: 16),
+
+            // Product selector
+            _buildSection('Produk', [
+              if (_sourceBranchId == null)
+                const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Text(
+                    'Pilih cabang asal terlebih dahulu',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                )
+              else if (_isLoadingProducts)
+                const Center(child: CircularProgressIndicator())
+              else
+                DropdownButtonFormField<String>(
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    prefixIcon: const Icon(Icons.inventory_2),
+                    hintText: 'Pilih produk',
+                    filled: true,
+                    fillColor: colorScheme.surfaceVariant,
+                  ),
+                  value: _selectedProductId,
+                  items: _sourceProducts.map((p) {
+                    return DropdownMenuItem(
+                      value: p.productId,
+                      child: Text(
+                        '${p.productName} (stok: ${p.currentStock})',
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    setState(() => _selectedProductId = val);
+                  },
+                  validator: (val) =>
+                      val == null ? 'Pilih produk' : null,
+                ),
+            ]),
+
+            const SizedBox(height: 16),
+
+            // Quantity input
+            _buildSection('Jumlah', [
+              TextFormField(
+                controller: _quantityController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  hintText: 'Masukkan jumlah transfer',
+                  prefixIcon: const Icon(Icons.numbers),
+                  filled: true,
+                  fillColor: colorScheme.surfaceVariant,
+                ),
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) {
+                    return 'Masukkan jumlah';
+                  }
+                  final qty = int.tryParse(val.trim());
+                  if (qty == null || qty <= 0) {
+                    return 'Jumlah harus lebih dari 0';
+                  }
+                  if (_selectedProductId != null) {
+                    final product = _sourceProducts.firstWhere(
+                      (p) => p.productId == _selectedProductId,
+                    );
+                    if (qty > product.currentStock) {
+                      return 'Stok tidak mencukupi (sisa: ${product.currentStock})';
+                    }
+                  }
+                  return null;
+                },
+              ),
+            ]),
+
+            const SizedBox(height: 24),
+
+            // Current stock info
+            if (_selectedProductId != null && _sourceProducts.isNotEmpty)
+              Card(
+                color: colorScheme.primaryContainer,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline,
+                          color: colorScheme.onPrimaryContainer),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Stok saat ini: ${_sourceProducts.firstWhere((p) => p.productId == _selectedProductId!).currentStock}',
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+            const SizedBox(height: 24),
+
+            // Submit button
+            SizedBox(
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: stockProv.isSubmittingTransfer ? null : _submit,
+                icon: stockProv.isSubmittingTransfer
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child:
+                            CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.swap_horiz),
+                label: Text(
+                  stockProv.isSubmittingTransfer
+                      ? 'Memproses Transfer...'
+                      : 'Proses Transfer',
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                ),
+              ),
             ),
+          ],
+        ),
+      ),
     );
   }
 

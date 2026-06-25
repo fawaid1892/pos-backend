@@ -38,6 +38,7 @@ type Branch struct {
 	Name      string     `json:"name"`
 	Address   string     `json:"address"`
 	Phone     string     `json:"phone"`
+	TaxRate   float64    `json:"tax_rate"`
 	IsActive  bool       `json:"is_active"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
@@ -110,6 +111,8 @@ type Transaction struct {
 	Subtotal        float64    `json:"subtotal"`
 	DiscountPercent float64    `json:"discount_percent"`
 	DiscountAmount  float64    `json:"discount_amount"`
+	TaxRate         float64    `json:"tax_rate"`
+	TaxAmount       float64    `json:"tax_amount"`
 	Total           float64    `json:"total"`
 	CashAmount      float64    `json:"cash_amount"`
 	ChangeAmount    float64    `json:"change_amount"`

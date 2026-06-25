@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import '../database/local_database.dart';
 import '../database/daos/daos.dart';
+import 'api_config.dart';
 import 'connectivity_service.dart';
 
 /// Sync status for the entire sync engine.
@@ -53,6 +55,9 @@ class SyncService extends ChangeNotifier {
   final SyncQueueDao _syncQueueDao = SyncQueueDao();
   final ConnectivityService _connectivity = ConnectivityService();
 
+  /// HTTP client — can be injected for testing.
+  http.Client _httpClient = http.Client();
+
   SyncStatus _status = SyncStatus.idle;
   String? _lastSyncError;
 
@@ -68,6 +73,15 @@ class SyncService extends ChangeNotifier {
   int get pendingCount => _pendingCount;
   int get conflictCount => _conflictCount;
   SyncResult? get lastSyncResult => _lastSyncResult;
+
+  // ── Testing Support ──
+
+  /// Replace the default HTTP client (e.g. with a mock for testing).
+  void setHttpClient(http.Client client) {
+    _httpClient = client;
+  }
+
+  // ── Initialization ──
 
   /// Initialize the sync service and compute initial pending counts.
   Future<void> init() async {
@@ -104,7 +118,6 @@ class SyncService extends ChangeNotifier {
         conflicts += (Sqflite.firstIntValue(conflictResult) ?? 0);
       }
 
-      // Also count sync_queue pending entries
       total += await _syncQueueDao.countPending();
 
       _pendingCount = total;
@@ -114,6 +127,8 @@ class SyncService extends ChangeNotifier {
       debugPrint('Error refreshing pending counts: $e');
     }
   }
+
+  // ── Full Sync Cycle ──
 
   /// Full sync cycle: push pending changes, then pull master data.
   Future<SyncResult> syncAll() async {
@@ -126,13 +141,9 @@ class SyncService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Step 1: Push pending local changes
       final pushResult = await _pushPendingChanges();
-
-      // Step 2: Pull master data from server
       final pullResult = await _pullMasterData();
 
-      // Step 3: Refresh counts
       await _refreshPendingCounts();
 
       final hasConflicts = pushResult.conflicts.isNotEmpty;
@@ -160,13 +171,14 @@ class SyncService extends ChangeNotifier {
     }
   }
 
+  // ── Push ──
+
   /// Push pending changes from local DB to server.
   Future<SyncResult> _pushPendingChanges() async {
     final db = await _db.database;
     final conflicts = <String>[];
     int pushedCount = 0;
 
-    // Collect pending records from each table
     final tables = [
       'transactions',
       'transaction_items',
@@ -181,7 +193,6 @@ class SyncService extends ChangeNotifier {
 
       if (pendingRecords.isEmpty) continue;
 
-      // Build push payload
       final payload = {
         'table': table,
         'records': pendingRecords,
@@ -189,11 +200,9 @@ class SyncService extends ChangeNotifier {
         'timestamp': DateTime.now().toIso8601String(),
       };
 
-      // Simulate HTTP POST /api/v1/sync/push
-      final response = await _mockPushSync(payload);
+      final response = await _httpPushSync(payload);
 
       if (response['status'] == 'success') {
-        // Mark records as synced
         for (final record in pendingRecords) {
           await db.update(
             table,
@@ -208,7 +217,6 @@ class SyncService extends ChangeNotifier {
         }
         pushedCount += pendingRecords.length;
       } else if (response['status'] == 'conflict') {
-        // Mark conflicting records
         final conflictIds = List<String>.from(response['conflict_ids'] ?? []);
         for (final id in conflictIds) {
           await db.update(
@@ -219,7 +227,6 @@ class SyncService extends ChangeNotifier {
           );
           conflicts.add('$table/$id');
         }
-        // Mark non-conflicted as synced
         for (final record in pendingRecords) {
           if (!conflictIds.contains(record['id'])) {
             await db.update(
@@ -245,16 +252,16 @@ class SyncService extends ChangeNotifier {
     );
   }
 
+  // ── Pull ──
+
   /// Pull master data from server.
   Future<SyncResult> _pullMasterData() async {
     int pulledCount = 0;
 
-    // Tables to pull master data for
     final pullTables = ['products', 'branches', 'categories', 'users'];
 
     for (final table in pullTables) {
-      // Simulate GET /api/v1/sync/pull?table=$table&since=
-      final response = await _mockPullSync(table);
+      final response = await _httpPullSync(table);
 
       if (response['status'] == 'success') {
         final records = List<Map<String, dynamic>>.from(response['data']);
@@ -279,6 +286,170 @@ class SyncService extends ChangeNotifier {
     return SyncResult(success: true, pulledCount: pulledCount);
   }
 
+  // ── Real HTTP Implementations ──
+
+  /// Push pending data to server via POST /api/v1/sync/push.
+  Future<Map<String, dynamic>> _httpPushSync(
+      Map<String, dynamic> payload) async {
+    try {
+      if (!_connectivity.isOnline) {
+        return {'status': 'offline', 'message': 'No internet connection'};
+      }
+
+      final uri = Uri.parse(ApiConfig.syncPushUrl);
+      final response = await _httpClient
+          .post(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode(payload),
+          )
+          .timeout(ApiConfig.requestTimeout);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        return body;
+      } else if (response.statusCode == 409) {
+        // Conflict response from server
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        return {
+          'status': 'conflict',
+          'conflict_ids': List<String>.from(body['conflict_ids'] ?? []),
+          'message': body['message'] ?? 'Conflict detected',
+        };
+      } else {
+        return {
+          'status': 'error',
+          'message':
+              'Server returned ${response.statusCode}: ${response.reasonPhrase}',
+        };
+      }
+    } on http.ClientException catch (e) {
+      debugPrint('HTTP push client error: $e');
+      return {'status': 'error', 'message': 'Connection failed: ${e.message}'};
+    } on Exception catch (e) {
+      debugPrint('HTTP push error: $e');
+      return {'status': 'error', 'message': e.toString()};
+    }
+  }
+
+  /// Pull master data from server via GET /api/v1/sync/pull?since=.
+  Future<Map<String, dynamic>> _httpPullSync(String table) async {
+    try {
+      if (!_connectivity.isOnline) {
+        return {'status': 'offline', 'data': [], 'message': 'No internet connection'};
+      }
+
+      // Use last successful sync timestamp; fallback to 7 days ago.
+      final db = await _db.database;
+      final lastSyncResult = await db.rawQuery(
+        'SELECT MAX(synced_at) as last_sync FROM $table WHERE sync_status = ?',
+        ['synced'],
+      );
+      final lastSync = Sqflite.firstIntValue(lastSyncResult) != null
+          ? (lastSyncResult.first['last_sync'] as String)
+          : DateTime.now().subtract(const Duration(days: 7)).toIso8601String();
+
+      final uri = Uri.parse(ApiConfig.syncPullUrlWithSince(lastSync))
+          .replace(queryParameters: {
+        'table': table,
+        'since': lastSync,
+      });
+
+      final response = await _httpClient
+          .get(
+            uri,
+            headers: {
+              'Accept': 'application/json',
+            },
+          )
+          .timeout(ApiConfig.requestTimeout);
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        return body;
+      } else {
+        return {
+          'status': 'error',
+          'data': [],
+          'message':
+              'Pull failed: ${response.statusCode} ${response.reasonPhrase}',
+        };
+      }
+    } on http.ClientException catch (e) {
+      debugPrint('HTTP pull client error: $e');
+      return {'status': 'error', 'data': [], 'message': 'Connection failed: ${e.message}'};
+    } on Exception catch (e) {
+      debugPrint('HTTP pull error: $e');
+      return {'status': 'error', 'data': [], 'message': e.toString()};
+    }
+  }
+
+  /// Send conflict resolution choice to server via POST /api/v1/sync/resolve.
+  Future<bool> _httpResolveConflict({
+    required String tableName,
+    required String recordId,
+    required bool useLocal,
+    Map<String, dynamic>? serverData,
+  }) async {
+    try {
+      final uri = Uri.parse(ApiConfig.syncResolveUrl);
+      final response = await _httpClient
+          .post(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({
+              'table': tableName,
+              'record_id': recordId,
+              'use_local': useLocal,
+              'server_data': serverData,
+            }),
+          )
+          .timeout(ApiConfig.requestTimeout);
+
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      debugPrint('HTTP resolve conflict error: $e');
+      // If sending the resolution to server fails, still resolve locally.
+      return true;
+    }
+  }
+
+  /// Fetch server version of a conflicted record via GET /api/v1/sync/conflict/:table/:id.
+  Future<Map<String, dynamic>?> _httpFetchServerVersion(
+    String tableName,
+    String recordId,
+  ) async {
+    try {
+      final uri = Uri.parse(ApiConfig.conflictDetailUrl(tableName, recordId));
+      final response = await _httpClient
+          .get(
+            uri,
+            headers: {'Accept': 'application/json'},
+          )
+          .timeout(ApiConfig.requestTimeout);
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        // Mark server version as synced
+        body['sync_status'] = 'synced';
+        body['pending_sync'] = 0;
+        return body;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('HTTP fetch server version error: $e');
+      return null;
+    }
+  }
+
+  // ── Conflict Resolution ──
+
   /// Manually resolve a conflict by choosing local or server version.
   Future<bool> resolveConflict({
     required String tableName,
@@ -287,10 +458,17 @@ class SyncService extends ChangeNotifier {
     Map<String, dynamic>? serverData,
   }) async {
     try {
+      // Notify server about the resolution choice
+      await _httpResolveConflict(
+        tableName: tableName,
+        recordId: recordId,
+        useLocal: useLocal,
+        serverData: serverData,
+      );
+
       final db = await _db.database;
 
       if (useLocal) {
-        // Keep local version, mark as pending for re-push
         await db.update(
           tableName,
           {
@@ -301,7 +479,6 @@ class SyncService extends ChangeNotifier {
           whereArgs: [recordId],
         );
       } else if (serverData != null) {
-        // Replace with server version
         await db.update(
           tableName,
           {
@@ -351,80 +528,27 @@ class SyncService extends ChangeNotifier {
     return conflicts;
   }
 
-  // ──────────────────────────────────────────────────────────
-  // Mock implementations for simulating server communication
-  // ──────────────────────────────────────────────────────────
-
-  Future<Map<String, dynamic>> _mockPushSync(Map<String, dynamic> payload) async {
-    // Simulate network delay
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    // Simulate 90% success, 10% conflict rate
-    final hasConflict = DateTime.now().millisecondsSinceEpoch % 10 == 0;
-
-    if (hasConflict) {
-      final records = List<Map<String, dynamic>>.from(payload['records']);
-      final conflictIds = records
-          .where((r) => r['id']?.toString().contains('conflict') ?? false)
-          .map((r) => r['id'] as String)
-          .toList();
-
-      return {
-        'status': 'conflict',
-        'conflict_ids': conflictIds,
-        'message': '${conflictIds.length} conflict(s) detected',
-      };
-    }
-
-    return {
-      'status': 'success',
-      'processed': (payload['records'] as List).length,
-      'message': 'Sync successful',
-    };
-  }
-
-  Future<Map<String, dynamic>> _mockPullSync(String table) async {
-    // Simulate network delay
-    await Future.delayed(const Duration(milliseconds: 400));
-
-    // Return empty data for mock — in production this would return server data
-    return {
-      'status': 'success',
-      'table': table,
-      'since': DateTime.now().subtract(const Duration(days: 7)).toIso8601String(),
-      'data': [],
-      'message': 'Pull successful',
-    };
-  }
-
-  /// Get all pending sync queue entries for UI display.
-  Future<List<Map<String, dynamic>>> getPendingQueueItems() async {
-    return await _syncQueueDao.getPending();
-  }
-
-  // ──────────────────────────────────────────────────────────
-  // Conflict Detail helpers
-  // ──────────────────────────────────────────────────────────
+  // ── Conflict Detail Helpers ──
 
   /// Fetch detailed local and server versions of a conflicted record.
-  /// Returns a map with 'local' and 'server' keys.
   Future<Map<String, Map<String, dynamic>>> getConflictDetail({
     required String tableName,
     required String recordId,
   }) async {
     final db = await _db.database;
 
-    // Get local version from table
     final localRows = await db.query(
       tableName,
       where: 'id = ?',
       whereArgs: [recordId],
     );
-    final localData = localRows.isNotEmpty ? Map<String, dynamic>.from(localRows.first) : <String, dynamic>{};
+    final localData = localRows.isNotEmpty
+        ? Map<String, dynamic>.from(localRows.first)
+        : <String, dynamic>{};
 
-    // Simulate fetching server version
-    // In production this would call GET /api/v1/sync/conflict/:table/:id
-    final serverData = await _mockFetchServerVersion(tableName, recordId, localData);
+    // Fetch server version via real HTTP
+    final serverData = await _httpFetchServerVersion(tableName, recordId) ??
+        _buildFallbackServerVersion(localData);
 
     return {
       'local': localData,
@@ -432,53 +556,35 @@ class SyncService extends ChangeNotifier {
     };
   }
 
-  Future<Map<String, dynamic>> _mockFetchServerVersion(
-    String tableName,
-    String recordId,
-    Map<String, dynamic> localData,
-  ) async {
-    await Future.delayed(const Duration(milliseconds: 200));
-
-    // Simulate slight server-side differences for demo purposes
+  /// Fallback: build a simulated server version when HTTP fetch fails or returns null.
+  Map<String, dynamic> _buildFallbackServerVersion(
+      Map<String, dynamic> localData) {
     if (localData.isEmpty) return <String, dynamic>{};
 
     final server = Map<String, dynamic>.from(localData);
-    // Tweak a few fields to simulate server having different values
     if (server.containsKey('updated_at')) {
       server['updated_at'] = DateTime.now().toIso8601String();
     }
-    if (server.containsKey('name') && localData['id']?.toString().contains('conflict') == true) {
-      server['name'] = '${server['name']} (Server v2)';
-    }
-    if (server.containsKey('price') && localData['price'] is num) {
-      // Simulate server having slightly different price
-      server['price'] = (localData['price'] as num).toDouble() * 1.05;
-    }
-    if (server.containsKey('stock') && localData['stock'] is int) {
-      server['stock'] = (localData['stock'] as int) + 3;
-    }
-    // Mark server version as synced
     server['sync_status'] = 'synced';
     server['pending_sync'] = 0;
-
     return server;
   }
 
-  // ──────────────────────────────────────────────────────────
-  // Dead Letter Queue (DLQ) helpers
-  // ──────────────────────────────────────────────────────────
+  /// Get all pending sync queue entries for UI display.
+  Future<List<Map<String, dynamic>>> getPendingQueueItems() async {
+    return await _syncQueueDao.getPending();
+  }
 
-  /// Get all failed sync queue items (DLQ).
+  // ── Dead Letter Queue (DLQ) Helpers ──
+
   Future<List<Map<String, dynamic>>> getDeadLetterQueueItems() async {
     return await _syncQueueDao.getFailed();
   }
 
-  /// Get count of failed sync queue items.
   Future<int> getDeadLetterCount() async {
     return await _syncQueueDao.countFailed();
   }
 
-  /// Retry a single failed queue item by resetting it to pending.
   Future<bool> retryDeadLetterItem(int queueId) async {
     try {
       return await _syncQueueDao.retryFailedItem(queueId);
@@ -488,7 +594,6 @@ class SyncService extends ChangeNotifier {
     }
   }
 
-  /// Delete a specific failed queue item from the DLQ.
   Future<bool> dismissDeadLetterItem(int queueId) async {
     try {
       return await _syncQueueDao.deleteFailedItem(queueId);
@@ -498,7 +603,6 @@ class SyncService extends ChangeNotifier {
     }
   }
 
-  /// Clear all failed items or only those older than [olderThanDays].
   Future<int> clearDeadLetterQueue({int olderThanDays = 0}) async {
     try {
       return await _syncQueueDao.clearResolved(olderThanDays: olderThanDays);

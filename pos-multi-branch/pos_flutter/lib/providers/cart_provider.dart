@@ -5,17 +5,23 @@ import '../models/product.dart';
 class CartProvider extends ChangeNotifier {
   List<TransactionItem> _items = [];
   double _discountTotal = 0.0;
+  double _taxRate = 0.0; // e.g. 0.11 for 11% PPN
   String _selectedPaymentMethod = 'Tunai';
 
   List<TransactionItem> get items => List.unmodifiable(_items);
   double get discountTotal => _discountTotal;
+  double get taxRate => _taxRate;
   String get selectedPaymentMethod => _selectedPaymentMethod;
 
   int get itemCount => _items.fold(0, (sum, item) => sum + item.quantity);
 
   double get total => _items.fold(0.0, (sum, item) => sum + item.subtotal);
 
-  double get grandTotal => total - _discountTotal;
+  double get taxableAmount => (total - _discountTotal).clamp(0, double.infinity);
+
+  double get taxAmount => taxableAmount * _taxRate;
+
+  double get grandTotal => taxableAmount + taxAmount;
 
   bool get isEmpty => _items.isEmpty;
 
@@ -68,6 +74,11 @@ class CartProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setTaxRate(double rate) {
+    _taxRate = rate;
+    notifyListeners();
+  }
+
   void setPaymentMethod(String method) {
     _selectedPaymentMethod = method;
     notifyListeners();
@@ -76,6 +87,7 @@ class CartProvider extends ChangeNotifier {
   void clearCart() {
     _items.clear();
     _discountTotal = 0.0;
+    _taxRate = 0.0;
     _selectedPaymentMethod = 'Tunai';
     notifyListeners();
   }
@@ -107,6 +119,8 @@ class CartProvider extends ChangeNotifier {
       }).toList(),
       total: total,
       discountTotal: _discountTotal,
+      taxRate: _taxRate,
+      taxAmount: taxAmount,
       grandTotal: grandTotal,
       paymentMethod: _selectedPaymentMethod,
       amountPaid: amountPaid,

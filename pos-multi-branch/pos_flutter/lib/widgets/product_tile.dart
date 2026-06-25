@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/product.dart';
+import '../utils/responsive.dart';
 
 class ProductTile extends StatelessWidget {
   final Product product;
@@ -13,16 +14,20 @@ class ProductTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isTablet = context.isTablet;
+
     return Card(
       elevation: 1,
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+          backgroundColor: colorScheme.primaryContainer,
           child: Text(
             product.name[0].toUpperCase(),
             style: TextStyle(
-              color: Theme.of(context).colorScheme.onPrimaryContainer,
+              color: colorScheme.onPrimaryContainer,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -34,8 +39,14 @@ class ProductTile extends StatelessWidget {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Barcode: ${product.barcode}'),
-            Text('Stok: ${product.stock}'),
+            Text(
+              'Barcode: ${product.barcode}',
+              style: TextStyle(color: colorScheme.onSurfaceVariant),
+            ),
+            Text(
+              'Stok: ${product.stock}',
+              style: TextStyle(color: colorScheme.onSurfaceVariant),
+            ),
           ],
         ),
         trailing: Column(
@@ -46,8 +57,8 @@ class ProductTile extends StatelessWidget {
               'Rp ${_formatPrice(product.price)}',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: Theme.of(context).colorScheme.primary,
+                fontSize: isTablet ? 18 : 16,
+                color: colorScheme.primary,
               ),
             ),
             if (product.stock <= 5)
@@ -55,7 +66,7 @@ class ProductTile extends StatelessWidget {
                 'Stok menipis!',
                 style: TextStyle(
                   fontSize: 11,
-                  color: Theme.of(context).colorScheme.error,
+                  color: colorScheme.error,
                 ),
               ),
           ],

@@ -40,7 +40,6 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
     final allKeys = <String>{...local.keys, ...server.keys};
     final diffs = <FieldDiff>[];
 
-    // Priority fields to show first
     const priorityFields = [
       'name', 'barcode', 'price', 'stock', 'quantity', 'total',
       'grand_total', 'amount_paid', 'status', 'role', 'email',
@@ -57,7 +56,6 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
         return a.compareTo(b);
       });
 
-    // Fields to skip (internal sync fields)
     const skipFields = {
       'pending_sync', 'synced_at', 'sync_status',
     };
@@ -89,6 +87,8 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final differCount = _diffs.where((d) => d.isDifferent).length;
     final isDesktop = MediaQuery.of(context).size.width > 600;
 
@@ -106,7 +106,9 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
             Container(
               padding: const EdgeInsets.fromLTRB(20, 16, 8, 8),
               decoration: BoxDecoration(
-                color: Colors.orange.shade50,
+                color: isDark
+                    ? Colors.orange.shade900
+                    : Colors.orange.shade50,
                 borderRadius:
                     const BorderRadius.vertical(top: Radius.circular(0)),
               ),
@@ -116,19 +118,27 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
                   Row(
                     children: [
                       Icon(Icons.warning_amber_rounded,
-                          color: Colors.orange.shade800, size: 24),
+                          color: isDark
+                              ? Colors.orange.shade200
+                              : Colors.orange.shade800,
+                          size: 24),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Conflict Resolution',
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
-                            color: Colors.orange.shade900,
+                            color: isDark
+                                ? Colors.orange.shade200
+                                : Colors.orange.shade900,
                           ),
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.close, size: 20),
+                        icon: Icon(Icons.close, size: 20,
+                            color: isDark
+                                ? Colors.orange.shade200
+                                : null),
                         onPressed: () => Navigator.of(context).pop(),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
@@ -140,7 +150,9 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
                     '${widget.tableName}/${widget.recordId}',
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.grey.shade700,
+                      color: isDark
+                          ? Colors.orange.shade300
+                          : Colors.grey.shade700,
                       fontFamily: 'monospace',
                     ),
                   ),
@@ -150,11 +162,13 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
                       _buildBadge(
                         '${_diffs.length} fields',
                         Colors.blueGrey,
+                        isDark,
                       ),
                       const SizedBox(width: 6),
                       _buildBadge(
                         '$differCount different',
                         differCount > 0 ? Colors.orange : Colors.green,
+                        isDark,
                       ),
                     ],
                   ),
@@ -166,7 +180,9 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
                         'Show only differences',
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey.shade700,
+                          color: isDark
+                              ? Colors.orange.shade300
+                              : Colors.grey.shade700,
                         ),
                       ),
                       const SizedBox(width: 4),
@@ -189,30 +205,33 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
             // Column headers
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-              color: Colors.grey.shade100,
+              color: isDark ? colorScheme.surfaceVariant : Colors.grey.shade100,
               child: Row(
                 children: [
-                  const SizedBox(
+                  SizedBox(
                     width: 120,
                     child: Text('Field',
                         style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 12)),
+                            fontWeight: FontWeight.bold, fontSize: 12,
+                            color: colorScheme.onSurface)),
                   ),
                   Expanded(
                     child: Row(
                       children: [
                         Icon(Icons.devices, size: 14, color: Colors.blue),
                         const SizedBox(width: 4),
-                        const Text('Local Data',
+                        Text('Local Data',
                             style: TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 12)),
+                                fontWeight: FontWeight.bold, fontSize: 12,
+                                color: colorScheme.onSurface)),
                         const Spacer(),
                         Icon(Icons.cloud_download,
                             size: 14, color: Colors.green),
                         const SizedBox(width: 4),
-                        const Text('Server Data',
+                        Text('Server Data',
                             style: TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 12)),
+                                fontWeight: FontWeight.bold, fontSize: 12,
+                                color: colorScheme.onSurface)),
                       ],
                     ),
                   ),
@@ -227,7 +246,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
                   children: (_showOnlyDifferences
                           ? _diffs.where((d) => d.isDifferent)
                           : _diffs)
-                      .map((diff) => _FieldRow(diff: diff))
+                      .map((diff) => _FieldRow(diff: diff, isDark: isDark))
                       .toList(),
                 ),
               ),
@@ -237,7 +256,7 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
             Container(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
               decoration: BoxDecoration(
-                color: Colors.grey.shade50,
+                color: isDark ? colorScheme.surfaceVariant : Colors.grey.shade50,
                 borderRadius:
                     const BorderRadius.vertical(bottom: Radius.circular(0)),
               ),
@@ -252,7 +271,6 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Use Local
                       _ActionButton(
                         icon: Icons.devices,
                         label: 'Gunakan Lokal',
@@ -263,7 +281,6 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
                         }),
                       ),
                       const SizedBox(width: 8),
-                      // Use Server
                       _ActionButton(
                         icon: Icons.cloud_download,
                         label: 'Gunakan Server',
@@ -284,16 +301,19 @@ class _ConflictResolutionDialogState extends State<ConflictResolutionDialog> {
     );
   }
 
-  Widget _buildBadge(String text, MaterialColor color) {
+  Widget _buildBadge(String text, MaterialColor color, bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: color.shade100,
+        color: isDark ? color.shade800 : color.shade100,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         text,
-        style: TextStyle(fontSize: 10, color: color.shade800),
+        style: TextStyle(
+          fontSize: 10,
+          color: isDark ? color.shade200 : color.shade800,
+        ),
       ),
     );
   }
@@ -317,25 +337,30 @@ class FieldDiff {
 /// A single field row in the diff comparison table.
 class _FieldRow extends StatelessWidget {
   final FieldDiff diff;
+  final bool isDark;
 
-  const _FieldRow({required this.diff});
+  const _FieldRow({required this.diff, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = diff.isDifferent ? Colors.orange.shade50 : null;
+    final bgColor = diff.isDifferent
+        ? (isDark ? Colors.orange.shade900.withOpacity(0.3) : Colors.orange.shade50)
+        : null;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       decoration: BoxDecoration(
         color: bgColor,
         border: Border(
-          bottom: BorderSide(color: Colors.grey.shade200, width: 0.5),
+          bottom: BorderSide(
+            color: isDark ? Colors.grey.shade700 : Colors.grey.shade200,
+            width: 0.5,
+          ),
         ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Field name
           SizedBox(
             width: 120,
             child: Text(
@@ -344,41 +369,51 @@ class _FieldRow extends StatelessWidget {
                 fontSize: 11,
                 fontFamily: 'monospace',
                 fontWeight: diff.isDifferent ? FontWeight.bold : null,
-                color: diff.isDifferent ? Colors.orange.shade900 : Colors.grey.shade700,
+                color: diff.isDifferent
+                    ? (isDark ? Colors.orange.shade200 : Colors.orange.shade900)
+                    : (isDark ? Colors.grey.shade400 : Colors.grey.shade700),
               ),
             ),
           ),
-          // Values
           Expanded(
             child: Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: diff.isDifferent ? Colors.orange.shade100 : Colors.transparent,
+                color: diff.isDifferent
+                    ? (isDark
+                        ? Colors.orange.shade800.withOpacity(0.4)
+                        : Colors.orange.shade100)
+                    : Colors.transparent,
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Row(
                 children: [
-                  // Local value
                   Expanded(
                     child: Text(
                       diff.localValue,
                       style: TextStyle(
                         fontSize: 11,
                         fontFamily: 'monospace',
-                        color: diff.isDifferent ? Colors.blue.shade800 : Colors.black87,
+                        color: diff.isDifferent
+                            ? Colors.blue.shade200
+                            : (isDark ? Colors.white70 : Colors.black87),
                       ),
                     ),
                   ),
                   if (diff.isDifferent)
-                    Icon(Icons.arrow_forward, size: 12, color: Colors.orange.shade600),
-                  // Server value
+                    Icon(Icons.arrow_forward, size: 12,
+                        color: isDark
+                            ? Colors.orange.shade300
+                            : Colors.orange.shade600),
                   Expanded(
                     child: Text(
                       diff.serverValue,
                       style: TextStyle(
                         fontSize: 11,
                         fontFamily: 'monospace',
-                        color: diff.isDifferent ? Colors.green.shade800 : Colors.black87,
+                        color: diff.isDifferent
+                            ? Colors.green.shade200
+                            : (isDark ? Colors.white70 : Colors.black87),
                       ),
                       textAlign: TextAlign.right,
                     ),

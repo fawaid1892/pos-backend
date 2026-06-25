@@ -17,6 +17,9 @@ class CartItemTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: Padding(
@@ -29,16 +32,17 @@ class CartItemTile extends StatelessWidget {
                 children: [
                   Text(
                     item.productName,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 15,
+                      color: colorScheme.onSurface,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     'Rp ${_formatPrice(item.price)}',
                     style: TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
+                      color: colorScheme.primary,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -47,7 +51,7 @@ class CartItemTile extends StatelessWidget {
                       'Diskon: Rp ${_formatPrice(item.discount)}',
                       style: TextStyle(
                         fontSize: 12,
-                        color: Theme.of(context).colorScheme.error,
+                        color: colorScheme.error,
                       ),
                     ),
                 ],
@@ -65,9 +69,10 @@ class CartItemTile extends StatelessWidget {
                   child: Text(
                     '${item.quantity}',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
+                      color: colorScheme.onSurface,
                     ),
                   ),
                 ),
@@ -83,9 +88,10 @@ class CartItemTile extends StatelessWidget {
               child: Text(
                 'Rp ${_formatPrice(item.subtotal)}',
                 textAlign: TextAlign.right,
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 15,
+                  color: colorScheme.onSurface,
                 ),
               ),
             ),

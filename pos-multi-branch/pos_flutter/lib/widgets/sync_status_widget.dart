@@ -4,6 +4,7 @@ import '../providers/sync_provider.dart';
 import '../services/sync_service.dart';
 import 'conflict_resolution_dialog.dart';
 import 'dead_letter_queue_widget.dart';
+import '../utils/responsive.dart';
 
 /// Sync status icon with badge showing pending count.
 /// Placed in the AppBar to show sync state at a glance.
@@ -63,6 +64,7 @@ class SyncStatusCard extends StatelessWidget {
     final lastResult = syncProvider.lastSyncResult;
 
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Card(
       margin: const EdgeInsets.all(12),
@@ -95,17 +97,17 @@ class SyncStatusCard extends StatelessWidget {
                   ),
               ],
             ),
-            const Divider(),
-            _buildRow('Pending sync', '$pendingCount items'),
-            _buildRow('Conflicts', '$conflictCount'),
+            Divider(color: colorScheme.outlineVariant),
+            _buildRow('Pending sync', '$pendingCount items', colorScheme),
+            _buildRow('Conflicts', '$conflictCount', colorScheme),
             if (lastResult != null) ...[
               const SizedBox(height: 4),
-              _buildRow('Last sync', _formatDuration(lastResult.completedAt)),
+              _buildRow('Last sync', _formatDuration(lastResult.completedAt), colorScheme),
               Text(
                 lastResult.summary,
                 style: TextStyle(
                   fontSize: 12,
-                  color: lastResult.success ? Colors.green : Colors.red,
+                  color: lastResult.success ? Colors.green : colorScheme.error,
                 ),
               ),
             ],
@@ -115,14 +117,16 @@ class SyncStatusCard extends StatelessWidget {
     );
   }
 
-  Widget _buildRow(String label, String value) {
+  Widget _buildRow(String label, String value, ColorScheme colorScheme) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.grey)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
+          Text(label,
+              style: TextStyle(color: colorScheme.onSurfaceVariant)),
+          Text(value,
+              style: const TextStyle(fontWeight: FontWeight.w500)),
         ],
       ),
     );
@@ -151,25 +155,34 @@ class SyncConflictTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final tableName = conflict['table'] as String? ?? '?';
     final recordId = conflict['id'] as String? ?? '?';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      color: Colors.orange.shade50,
+      color: isDark ? Colors.orange.shade900 : Colors.orange.shade50,
       child: ListTile(
         leading: CircleAvatar(
           radius: 16,
-          backgroundColor: Colors.orange.shade100,
+          backgroundColor:
+              isDark ? Colors.orange.shade800 : Colors.orange.shade100,
           child: Icon(Icons.warning_amber_rounded,
               size: 20, color: Colors.orange.shade700),
         ),
         title: Text(
           '$tableName/$recordId',
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: isDark ? Colors.orange.shade200 : null,
+          ),
           overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(
           'Conflict detected • Tap to compare versions',
-          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+          style: TextStyle(
+            fontSize: 12,
+            color: isDark ? Colors.orange.shade300 : Colors.grey.shade600,
+          ),
         ),
         trailing: const Icon(Icons.chevron_right, color: Colors.grey),
         onTap: () => _openResolutionDialog(context),
@@ -299,7 +312,10 @@ class _BatchResolveDialogState extends State<_BatchResolveDialog> {
             _useLocal
                 ? 'Keep all local versions and re-push'
                 : 'Replace all local data with server versions',
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ],
       ),
@@ -416,12 +432,13 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
   @override
   Widget build(BuildContext context) {
     final syncProvider = context.watch<SyncProvider>();
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Sync Status'),
         actions: [
-          // Quick actions menu
           PopupMenuButton<String>(
             onSelected: (value) async {
               switch (value) {
@@ -457,7 +474,6 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                 ),
             ],
           ),
-          // Sync button
           IconButton(
             icon: syncProvider.isSyncing
                 ? const SizedBox(
@@ -497,7 +513,8 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
 
             // ── Quick Stats Row ──
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               child: Row(
                 children: [
                   _StatChip(
@@ -516,15 +533,12 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                     icon: Icons.error_outline,
                     label: '$_deadLetterCount Failed',
                     color: Colors.red,
-                    onTap: () {
-                      // Scroll to DLQ section
-                    },
                   ),
                 ],
               ),
             ),
 
-            const Divider(),
+            Divider(color: colorScheme.outlineVariant),
 
             // ── Conflicts Section ──
             Padding(
@@ -563,7 +577,8 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                   if (_conflicts.length > 1)
                     TextButton.icon(
                       icon: const Icon(Icons.done_all, size: 16),
-                      label: const Text('Resolve All', style: TextStyle(fontSize: 12)),
+                      label: const Text('Resolve All',
+                          style: TextStyle(fontSize: 12)),
                       onPressed: _batchResolve,
                     ),
                 ],
@@ -578,11 +593,11 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                 ),
               )
             else if (_conflicts.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(12),
+              Padding(
+                padding: const EdgeInsets.all(12),
                 child: Text('No conflicts',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey)),
+                    style: TextStyle(color: colorScheme.onSurfaceVariant)),
               )
             else
               ..._conflicts.map((conflict) => SyncConflictTile(
@@ -593,23 +608,23 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
                     },
                   )),
 
-            const Divider(),
+            Divider(color: colorScheme.outlineVariant),
 
             // ── Dead Letter Queue Section ──
             const DeadLetterQueuePanel(),
 
-            const Divider(),
+            Divider(color: colorScheme.outlineVariant),
 
             // ── Pending Sync Queue Section ──
-            _buildSectionHeader('Pending Sync Queue'),
-            _buildPendingList(),
+            _buildSectionHeader('Pending Sync Queue', colorScheme),
+            _buildPendingList(colorScheme),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSectionHeader(String title) {
+  Widget _buildSectionHeader(String title, ColorScheme colorScheme) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 16, 12, 4),
       child: Row(
@@ -618,9 +633,10 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
           const SizedBox(width: 6),
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
+              color: colorScheme.onSurface,
             ),
           ),
         ],
@@ -628,24 +644,30 @@ class _SyncStatusScreenState extends State<SyncStatusScreen> {
     );
   }
 
-  Widget _buildPendingList() {
+  Widget _buildPendingList(ColorScheme colorScheme) {
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: context.read<SyncProvider>().syncService.getPendingQueueItems(),
+      future: context
+          .read<SyncProvider>()
+          .syncService
+          .getPendingQueueItems(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: Padding(
-            padding: EdgeInsets.all(8),
-            child: CircularProgressIndicator(),
-          ));
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(8),
+              child: CircularProgressIndicator(),
+            ),
+          );
         }
 
         final items = snapshot.data ?? [];
         if (items.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.all(12),
+          return Padding(
+            padding: const EdgeInsets.all(12),
             child: Text('No pending items',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey)),
+                style:
+                    TextStyle(color: colorScheme.onSurfaceVariant)),
           );
         }
 
@@ -696,26 +718,28 @@ class _StatChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: color.shade50,
+          color: isDark ? color.shade900 : color.shade50,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.shade200),
+          border: Border.all(color: isDark ? color.shade700 : color.shade200),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: color.shade700),
+            Icon(icon, size: 14, color: isDark ? color.shade200 : color.shade700),
             const SizedBox(width: 4),
             Text(
               label,
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color: color.shade800,
+                color: isDark ? color.shade200 : color.shade800,
               ),
             ),
           ],

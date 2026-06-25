@@ -54,7 +54,7 @@ func VerifyPassword(hashed, plain string) bool {
 
 func ListBranches(ctx context.Context) ([]model.Branch, error) {
 	rows, err := database.Pool.Query(ctx,
-		`SELECT id, name, address, phone, is_active, created_at, updated_at, deleted_at
+		`SELECT id, name, address, phone, tax_rate, is_active, created_at, updated_at, deleted_at
 		 FROM branches WHERE deleted_at IS NULL ORDER BY name`)
 	if err != nil {
 		return nil, err
@@ -64,7 +64,7 @@ func ListBranches(ctx context.Context) ([]model.Branch, error) {
 	var branches []model.Branch
 	for rows.Next() {
 		var b model.Branch
-		if err := rows.Scan(&b.ID, &b.Name, &b.Address, &b.Phone, &b.IsActive, &b.CreatedAt, &b.UpdatedAt, &b.DeletedAt); err != nil {
+		if err := rows.Scan(&b.ID, &b.Name, &b.Address, &b.Phone, &b.TaxRate, &b.IsActive, &b.CreatedAt, &b.UpdatedAt, &b.DeletedAt); err != nil {
 			return nil, err
 		}
 		branches = append(branches, b)
@@ -75,9 +75,9 @@ func ListBranches(ctx context.Context) ([]model.Branch, error) {
 func GetBranchByID(ctx context.Context, id uuid.UUID) (*model.Branch, error) {
 	b := &model.Branch{}
 	err := database.Pool.QueryRow(ctx,
-		`SELECT id, name, address, phone, is_active, created_at, updated_at, deleted_at
+		`SELECT id, name, address, phone, tax_rate, is_active, created_at, updated_at, deleted_at
 		 FROM branches WHERE id = $1 AND deleted_at IS NULL`, id,
-	).Scan(&b.ID, &b.Name, &b.Address, &b.Phone, &b.IsActive, &b.CreatedAt, &b.UpdatedAt, &b.DeletedAt)
+	).Scan(&b.ID, &b.Name, &b.Address, &b.Phone, &b.TaxRate, &b.IsActive, &b.CreatedAt, &b.UpdatedAt, &b.DeletedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -90,10 +90,10 @@ func GetBranchByID(ctx context.Context, id uuid.UUID) (*model.Branch, error) {
 func CreateBranch(ctx context.Context, req model.CreateBranchRequest) (*model.Branch, error) {
 	b := &model.Branch{}
 	err := database.Pool.QueryRow(ctx,
-		`INSERT INTO branches (name, address, phone) VALUES ($1,$2,$3)
-		 RETURNING id, name, address, phone, is_active, created_at, updated_at, deleted_at`,
-		req.Name, req.Address, req.Phone,
-	).Scan(&b.ID, &b.Name, &b.Address, &b.Phone, &b.IsActive, &b.CreatedAt, &b.UpdatedAt, &b.DeletedAt)
+		`INSERT INTO branches (name, address, phone, tax_rate) VALUES ($1,$2,$3,$4)
+		 RETURNING id, name, address, phone, tax_rate, is_active, created_at, updated_at, deleted_at`,
+		req.Name, req.Address, req.Phone, 0,
+	).Scan(&b.ID, &b.Name, &b.Address, &b.Phone, &b.TaxRate, &b.IsActive, &b.CreatedAt, &b.UpdatedAt, &b.DeletedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -105,9 +105,9 @@ func UpdateBranch(ctx context.Context, id uuid.UUID, req model.UpdateBranchReque
 	err := database.Pool.QueryRow(ctx,
 		`UPDATE branches SET name=$1, address=$2, phone=$3, updated_at=NOW()
 		 WHERE id=$4 AND deleted_at IS NULL
-		 RETURNING id, name, address, phone, is_active, created_at, updated_at, deleted_at`,
+		 RETURNING id, name, address, phone, tax_rate, is_active, created_at, updated_at, deleted_at`,
 		req.Name, req.Address, req.Phone, id,
-	).Scan(&b.ID, &b.Name, &b.Address, &b.Phone, &b.IsActive, &b.CreatedAt, &b.UpdatedAt, &b.DeletedAt)
+	).Scan(&b.ID, &b.Name, &b.Address, &b.Phone, &b.TaxRate, &b.IsActive, &b.CreatedAt, &b.UpdatedAt, &b.DeletedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -290,12 +290,13 @@ func SoftDeleteProduct(ctx context.Context, id uuid.UUID) error {
 func CreateTransaction(ctx context.Context, txData *model.Transaction) error {
 	return database.Pool.QueryRow(ctx,
 		`INSERT INTO transactions (branch_id, user_id, customer_name, subtotal,
-		                           discount_percent, discount_amount, total,
+		                           discount_percent, discount_amount, tax_rate, tax_amount, total,
 		                           cash_amount, change_amount)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 		 RETURNING id, created_at`,
 		txData.BranchID, txData.UserID, txData.CustomerName,
 		txData.Subtotal, txData.DiscountPercent, txData.DiscountAmount,
+		txData.TaxRate, txData.TaxAmount,
 		txData.Total, txData.CashAmount, txData.ChangeAmount,
 	).Scan(&txData.ID, &txData.CreatedAt)
 }
@@ -341,6 +342,7 @@ func ListTransactions(ctx context.Context, branchID *uuid.UUID, limit, offset in
 	query := fmt.Sprintf(`
 		SELECT t.id, t.branch_id, t.user_id, t.customer_name,
 		       t.subtotal, t.discount_percent, t.discount_amount,
+		       t.tax_rate, t.tax_amount,
 		       t.total, t.cash_amount, t.change_amount, t.created_at
 		FROM transactions t%s
 		ORDER BY t.created_at DESC
@@ -358,6 +360,7 @@ func ListTransactions(ctx context.Context, branchID *uuid.UUID, limit, offset in
 		var tx model.Transaction
 		if err := rows.Scan(&tx.ID, &tx.BranchID, &tx.UserID, &tx.CustomerName,
 			&tx.Subtotal, &tx.DiscountPercent, &tx.DiscountAmount,
+			&tx.TaxRate, &tx.TaxAmount,
 			&tx.Total, &tx.CashAmount, &tx.ChangeAmount, &tx.CreatedAt); err != nil {
 			return nil, err
 		}
@@ -371,10 +374,12 @@ func GetTransactionByID(ctx context.Context, id uuid.UUID) (*model.Transaction, 
 	err := database.Pool.QueryRow(ctx,
 		`SELECT id, branch_id, user_id, customer_name,
 		        subtotal, discount_percent, discount_amount,
+		        tax_rate, tax_amount,
 		        total, cash_amount, change_amount, created_at
 		 FROM transactions WHERE id = $1`, id,
 	).Scan(&tx.ID, &tx.BranchID, &tx.UserID, &tx.CustomerName,
 		&tx.Subtotal, &tx.DiscountPercent, &tx.DiscountAmount,
+		&tx.TaxRate, &tx.TaxAmount,
 		&tx.Total, &tx.CashAmount, &tx.ChangeAmount, &tx.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -677,6 +682,7 @@ type SalesExportRow struct {
 	Items       string  `json:"items"`
 	Subtotal    float64 `json:"subtotal"`
 	Discount    float64 `json:"discount"`
+	TaxAmount   float64 `json:"tax_amount"`
 	Total       float64 `json:"total"`
 	Cash        float64 `json:"cash"`
 	Change      float64 `json:"change"`
@@ -687,7 +693,7 @@ func GetSalesExportData(ctx context.Context, branchID uuid.UUID, start, end time
 		`SELECT t.created_at::TEXT, t.customer_name,
 		        (SELECT STRING_AGG(ti.product_name || ' x' || ti.quantity::TEXT, ', ')
 		         FROM transaction_items ti WHERE ti.transaction_id = t.id) as items,
-		        t.subtotal, t.discount_amount, t.total, t.cash_amount, t.change_amount
+		        t.subtotal, t.discount_amount, t.tax_amount, t.total, t.cash_amount, t.change_amount
 		 FROM transactions t
 		 WHERE t.branch_id = $1 AND t.created_at >= $2 AND t.created_at < $3
 		 ORDER BY t.created_at DESC`,
@@ -700,7 +706,7 @@ func GetSalesExportData(ctx context.Context, branchID uuid.UUID, start, end time
 	var data []SalesExportRow
 	for rows.Next() {
 		var r SalesExportRow
-		if err := rows.Scan(&r.Date, &r.CustomerName, &r.Items, &r.Subtotal, &r.Discount, &r.Total, &r.Cash, &r.Change); err != nil {
+		if err := rows.Scan(&r.Date, &r.CustomerName, &r.Items, &r.Subtotal, &r.Discount, &r.TaxAmount, &r.Total, &r.Cash, &r.Change); err != nil {
 			return nil, err
 		}
 		data = append(data, r)

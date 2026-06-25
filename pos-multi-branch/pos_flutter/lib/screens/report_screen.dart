@@ -4,7 +4,12 @@ import '../models/report.dart';
 import '../providers/report_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/sync_provider.dart';
+import '../providers/theme_provider.dart';
 import '../widgets/sync_status_widget.dart';
+import '../widgets/shimmer_loading.dart';
+import '../widgets/error_state_widget.dart';
+import '../widgets/empty_state_widget.dart';
+import '../utils/responsive.dart';
 
 class ReportScreen extends StatefulWidget {
   const ReportScreen({super.key});
@@ -98,13 +103,20 @@ class _ReportScreenState extends State<ReportScreen>
       appBar: AppBar(
         title: const Text('Laporan'),
         actions: [
-          // Sync status
+          Consumer<ThemeProvider>(
+            builder: (context, themeProv, _) => IconButton(
+              icon: Icon(
+                themeProv.isDarkMode ? Icons.light_mode : Icons.dark_mode,
+              ),
+              onPressed: () => themeProv.toggleTheme(),
+              tooltip: 'Toggle Dark Mode',
+            ),
+          ),
           IconButton(
             icon: const SyncStatusIcon(),
             onPressed: () => Navigator.pushNamed(context, '/sync-status'),
             tooltip: 'Sync Status',
           ),
-          // Date range picker
           TextButton.icon(
             onPressed: _pickDateRange,
             icon: const Icon(Icons.date_range),
@@ -116,7 +128,6 @@ class _ReportScreenState extends State<ReportScreen>
               style: const TextStyle(fontSize: 12),
             ),
           ),
-          // Export button
           IconButton(
             icon: const Icon(Icons.file_download),
             tooltip: 'Export Laporan',
@@ -148,12 +159,20 @@ class _ReportScreenState extends State<ReportScreen>
   // ─────────────────────────────
   Widget _buildSalesReportTab(ReportProvider reportProv) {
     if (reportProv.isLoadingSalesReport) {
-      return const Center(child: CircularProgressIndicator());
+      return const ShimmerPage(itemCount: 6);
+    }
+
+    if (reportProv.salesReportError != null) {
+      return ErrorStateWidget(
+        message: reportProv.salesReportError!,
+        title: 'Gagal memuat laporan penjualan',
+        onRetry: () => reportProv.loadSalesReport(),
+      );
     }
 
     final report = reportProv.salesReport;
     if (report == null) {
-      return const Center(child: Text('Pilih tanggal untuk melihat laporan'));
+      return const EmptyStateWidget.report();
     }
 
     return RefreshIndicator(
@@ -161,7 +180,6 @@ class _ReportScreenState extends State<ReportScreen>
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Summary cards
           _buildSummaryCard(
             title: 'Total Penjualan',
             value: _formatCurrency(report.totalSales),
@@ -197,10 +215,7 @@ class _ReportScreenState extends State<ReportScreen>
             icon: Icons.analytics,
             color: Colors.purple,
           ),
-
           const SizedBox(height: 16),
-
-          // Detail items
           const Text('Detail Produk Terjual',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
@@ -234,7 +249,15 @@ class _ReportScreenState extends State<ReportScreen>
   // ─────────────────────────────
   Widget _buildStockReportTab(ReportProvider reportProv) {
     if (reportProv.isLoadingStockReport) {
-      return const Center(child: CircularProgressIndicator());
+      return const ShimmerPage(itemCount: 6);
+    }
+
+    if (reportProv.stockReportError != null) {
+      return ErrorStateWidget(
+        message: reportProv.stockReportError!,
+        title: 'Gagal memuat laporan stok',
+        onRetry: () => reportProv.loadStockReport(),
+      );
     }
 
     final report = reportProv.stockReport;
@@ -247,7 +270,6 @@ class _ReportScreenState extends State<ReportScreen>
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Summary
           Row(
             children: [
               Expanded(
@@ -292,10 +314,7 @@ class _ReportScreenState extends State<ReportScreen>
               ),
             ],
           ),
-
           const SizedBox(height: 16),
-
-          // Product stock list
           const Text('Detail Stok Produk',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
@@ -346,7 +365,8 @@ class _ReportScreenState extends State<ReportScreen>
                 ),
                 trailing: Text(
                   _formatCurrency(product.stockValue),
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  style:
+                      const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
               ),
             );
@@ -361,23 +381,32 @@ class _ReportScreenState extends State<ReportScreen>
   // ─────────────────────────────
   Widget _buildProfitLossTab(ReportProvider reportProv) {
     if (reportProv.isLoadingProfitLoss) {
-      return const Center(child: CircularProgressIndicator());
+      return const ShimmerPage(itemCount: 6);
+    }
+
+    if (reportProv.profitLossError != null) {
+      return ErrorStateWidget(
+        message: reportProv.profitLossError!,
+        title: 'Gagal memuat laporan laba rugi',
+        onRetry: () => reportProv.loadProfitLossReport(),
+      );
     }
 
     final report = reportProv.profitLossReport;
     if (report == null) {
-      return const Center(
-          child: Text('Pilih tanggal untuk melihat laporan laba rugi'));
+      return const EmptyStateWidget.report();
     }
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return RefreshIndicator(
       onRefresh: () => reportProv.loadProfitLossReport(),
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // P&L Summary cards
           Card(
-            color: Colors.green.shade50,
+            color: isDark ? Colors.green.shade900 : Colors.green.shade50,
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -387,10 +416,12 @@ class _ReportScreenState extends State<ReportScreen>
                   const SizedBox(height: 4),
                   Text(
                     _formatCurrency(report.totalRevenue),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
-                      color: Colors.green,
+                      color: isDark
+                          ? Colors.green.shade200
+                          : Colors.green,
                     ),
                   ),
                 ],
@@ -398,9 +429,8 @@ class _ReportScreenState extends State<ReportScreen>
             ),
           ),
           const SizedBox(height: 8),
-
           Card(
-            color: Colors.red.shade50,
+            color: isDark ? Colors.red.shade900 : Colors.red.shade50,
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
@@ -408,26 +438,32 @@ class _ReportScreenState extends State<ReportScreen>
                 children: [
                   Column(
                     children: [
-                      const Text('HPP', style: TextStyle(color: Colors.grey)),
+                      const Text('HPP',
+                          style: TextStyle(color: Colors.grey)),
                       Text(
                         _formatCurrency(report.totalCost),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: Colors.red,
+                          color:
+                              isDark ? Colors.red.shade200 : Colors.red,
                         ),
                       ),
                     ],
                   ),
-                  Container(height: 40, width: 1, color: Colors.grey.shade300),
+                  Container(
+                      height: 40,
+                      width: 1,
+                      color: Colors.grey.shade300),
                   Column(
                     children: [
                       const Text('Biaya Operasional',
                           style: TextStyle(color: Colors.grey)),
                       Text(
                         _formatCurrency(report.totalExpenses),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: Colors.red,
+                          color:
+                              isDark ? Colors.red.shade200 : Colors.red,
                         ),
                       ),
                     ],
@@ -437,11 +473,10 @@ class _ReportScreenState extends State<ReportScreen>
             ),
           ),
           const SizedBox(height: 8),
-
           Card(
             color: report.netProfit >= 0
-                ? Colors.green.shade50
-                : Colors.red.shade50,
+                ? (isDark ? Colors.green.shade900 : Colors.green.shade50)
+                : (isDark ? Colors.red.shade900 : Colors.red.shade50),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -454,7 +489,13 @@ class _ReportScreenState extends State<ReportScreen>
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
-                      color: report.netProfit >= 0 ? Colors.green : Colors.red,
+                      color: report.netProfit >= 0
+                          ? (isDark
+                              ? Colors.green.shade200
+                              : Colors.green)
+                          : (isDark
+                              ? Colors.red.shade200
+                              : Colors.red),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -472,10 +513,7 @@ class _ReportScreenState extends State<ReportScreen>
               ),
             ),
           ),
-
           const SizedBox(height: 24),
-
-          // Detailed breakdown
           const Text('Rincian',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
@@ -544,7 +582,8 @@ class _ReportScreenState extends State<ReportScreen>
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(color: Colors.grey)),
+                Text(title,
+                    style: const TextStyle(color: Colors.grey)),
                 Text(value,
                     style: const TextStyle(
                         fontSize: 20, fontWeight: FontWeight.bold)),
@@ -578,7 +617,8 @@ class _ReportScreenState extends State<ReportScreen>
               ),
             ),
             Text(title,
-                style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                style: const TextStyle(
+                    fontSize: 11, color: Colors.grey)),
           ],
         ),
       ),

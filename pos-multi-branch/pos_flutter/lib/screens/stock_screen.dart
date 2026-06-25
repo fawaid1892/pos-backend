@@ -3,8 +3,13 @@ import 'package:provider/provider.dart';
 import '../providers/stock_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/sync_provider.dart';
+import '../providers/theme_provider.dart';
 import '../models/stock_adjustment.dart';
 import '../widgets/sync_status_widget.dart';
+import '../widgets/shimmer_loading.dart';
+import '../widgets/error_state_widget.dart';
+import '../widgets/empty_state_widget.dart';
+import '../utils/responsive.dart';
 
 class StockScreen extends StatefulWidget {
   const StockScreen({super.key});
@@ -49,12 +54,22 @@ class _StockScreenState extends State<StockScreen>
   @override
   Widget build(BuildContext context) {
     final stockProv = context.watch<StockProvider>();
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Stok Inventory'),
         actions: [
-          // Sync status
+          Consumer<ThemeProvider>(
+            builder: (context, themeProv, _) => IconButton(
+              icon: Icon(
+                themeProv.isDarkMode ? Icons.light_mode : Icons.dark_mode,
+              ),
+              onPressed: () => themeProv.toggleTheme(),
+              tooltip: 'Toggle Dark Mode',
+            ),
+          ),
           IconButton(
             icon: const SyncStatusIcon(),
             onPressed: () => Navigator.pushNamed(context, '/sync-status'),
@@ -86,13 +101,13 @@ class _StockScreenState extends State<StockScreen>
                       padding: const EdgeInsets.symmetric(
                           horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: Colors.red,
+                        color: colorScheme.error,
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
                         '${stockProv.alerts.length}',
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: colorScheme.onError,
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
                         ),
@@ -145,44 +160,48 @@ class _StockScreenState extends State<StockScreen>
           ),
         ),
         Expanded(
-          child: stockProv.isLoadingInventory
-              ? const Center(child: CircularProgressIndicator())
-              : stockProv.inventory.isEmpty
-                  ? const Center(child: Text('Tidak ada data inventory'))
-                  : RefreshIndicator(
-                      onRefresh: () =>
-                          context.read<StockProvider>().loadInventory(),
-                      child: ListView.builder(
-                        itemCount: stockProv.inventory.length,
-                        itemBuilder: (context, index) {
-                          final item = stockProv.inventory[index];
-                          return _buildStockTile(item);
-                        },
-                      ),
-                    ),
+          child: _buildInventoryContent(stockProv),
         ),
       ],
     );
   }
 
+  Widget _buildInventoryContent(StockProvider stockProv) {
+    if (stockProv.isLoadingInventory) {
+      return const ShimmerPage(itemCount: 8);
+    }
+
+    if (stockProv.inventoryError != null) {
+      return ErrorStateWidget(
+        message: stockProv.inventoryError!,
+        title: 'Gagal memuat inventory',
+        onRetry: () => stockProv.loadInventory(),
+      );
+    }
+
+    if (stockProv.inventory.isEmpty) {
+      return const EmptyStateWidget.stock();
+    }
+
+    return RefreshIndicator(
+      onRefresh: () => context.read<StockProvider>().loadInventory(),
+      child: ListView.builder(
+        itemCount: stockProv.inventory.length,
+        itemBuilder: (context, index) {
+          final item = stockProv.inventory[index];
+          return _buildStockTile(item);
+        },
+      ),
+    );
+  }
+
   Widget _buildAlertTab(StockProvider stockProv) {
     if (stockProv.isLoadingAlerts) {
-      return const Center(child: CircularProgressIndicator());
+      return const ShimmerPage(itemCount: 4);
     }
 
     if (stockProv.alerts.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.check_circle_outline,
-                size: 64, color: Colors.green),
-            SizedBox(height: 12),
-            Text('Semua stok aman',
-                style: TextStyle(fontSize: 16, color: Colors.grey)),
-          ],
-        ),
-      );
+      return const EmptyStateWidget.alert();
     }
 
     return ListView.builder(
@@ -216,6 +235,8 @@ class _StockScreenState extends State<StockScreen>
       statusText = 'Aman';
     }
 
+    final theme = Theme.of(context);
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: ListTile(
@@ -236,8 +257,7 @@ class _StockScreenState extends State<StockScreen>
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(statusText,
-                  style: TextStyle(
-                      color: statusColor, fontSize: 11)),
+                  style: TextStyle(color: statusColor, fontSize: 11)),
             ),
           ],
         ),
@@ -269,11 +289,18 @@ class _StockScreenState extends State<StockScreen>
   }
 
   Widget _buildAlertTile(ProductStock item) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      color: item.currentStock == 0
-          ? Colors.red.shade50
-          : Colors.orange.shade50,
+      color: isDark
+          ? (item.currentStock == 0
+              ? Colors.red.shade900
+              : Colors.orange.shade900)
+          : (item.currentStock == 0
+              ? Colors.red.shade50
+              : Colors.orange.shade50),
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor:
@@ -290,7 +317,13 @@ class _StockScreenState extends State<StockScreen>
               ? 'Stok habis!'
               : 'Stok: ${item.currentStock} (min: ${item.minimumStock})',
           style: TextStyle(
-            color: item.currentStock == 0 ? Colors.red : Colors.orange.shade800,
+            color: isDark
+                ? (item.currentStock == 0
+                    ? Colors.red.shade200
+                    : Colors.orange.shade200)
+                : (item.currentStock == 0
+                    ? Colors.red
+                    : Colors.orange.shade800),
           ),
         ),
         trailing: IconButton(

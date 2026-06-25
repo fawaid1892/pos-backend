@@ -1,3 +1,4 @@
+import 'package:sqflite/sqflite.dart';
 import '../database/local_database.dart';
 
 /// Seeds initial data into local SQLite on first run.

@@ -27,6 +27,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   ];
   bool _isProcessing = false;
 
+  // Predefined tax rates: 0% (non-PPN), 11% (PPN standard)
+  final List<Map<String, dynamic>> _taxRates = const [
+    {'label': 'Non PPN', 'rate': 0.0},
+    {'label': 'PPN 11%', 'rate': 0.11},
+  ];
+
   @override
   void dispose() {
     _amountController.dispose();
@@ -171,6 +177,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               style: const TextStyle(color: Colors.red)),
                         ],
                       ),
+                    if (cart.taxRate > 0) ...[                      
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Pajak (${(cart.taxRate * 100).toStringAsFixed(0)}%)',
+                              style: const TextStyle(fontWeight: FontWeight.w500)),
+                          Text('Rp ${_formatPrice(cart.taxAmount)}',
+                              style: TextStyle(color: colorScheme.primary)),
+                        ],
+                      ),
+                    ],
                     const Divider(),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -185,6 +202,52 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 color: colorScheme.primary)),
                       ],
                     ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Pajak (Tax Rate Selector)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Pajak (PPN)',
+                        style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _taxRates.map((tax) {
+                        final isSelected = cart.taxRate == tax['rate'];
+                        return ChoiceChip(
+                          label: Text(tax['label'] as String),
+                          selected: isSelected,
+                          onSelected: (_) {
+                            cart.setTaxRate(tax['rate'] as double);
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    if (cart.taxRate > 0) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                              'Pajak ${(cart.taxRate * 100).toStringAsFixed(0)}%',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w500)),
+                          Text('Rp ${_formatPrice(cart.taxAmount)}',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: colorScheme.primary)),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),

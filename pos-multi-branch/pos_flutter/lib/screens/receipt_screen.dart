@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../models/transaction.dart';
+import '../providers/theme_provider.dart';
+import '../utils/responsive.dart';
 
 class ReceiptScreen extends StatelessWidget {
   const ReceiptScreen({super.key});
@@ -9,17 +12,27 @@ class ReceiptScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final transaction =
         ModalRoute.of(context)!.settings.arguments as Transaction;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isTablet = context.isTablet;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Struk Pembayaran'),
         automaticallyImplyLeading: false,
         actions: [
+          Consumer<ThemeProvider>(
+            builder: (context, themeProv, _) => IconButton(
+              icon: Icon(
+                themeProv.isDarkMode ? Icons.light_mode : Icons.dark_mode,
+              ),
+              onPressed: () => themeProv.toggleTheme(),
+              tooltip: 'Toggle Dark Mode',
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.print),
             onPressed: () {
-              // esc_pos_bluetooth integration placeholder
-              // await BluetoothManager.instance.startScan();
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                     content: Text('Cetak struk via Bluetooth printer')),
@@ -29,7 +42,7 @@ class ReceiptScreen extends StatelessWidget {
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(isTablet ? 32 : 24),
         child: Column(
           children: [
             Icon(
@@ -38,9 +51,13 @@ class ReceiptScreen extends StatelessWidget {
               color: Colors.green[600],
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Pembayaran Berhasil!',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: colorScheme.onSurface,
+              ),
             ),
             const SizedBox(height: 24),
 
@@ -57,22 +74,25 @@ class ReceiptScreen extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.primary,
+                        color: colorScheme.primary,
                       ),
                     ),
-                    const Text('POS Multi Branch',
-                        style: TextStyle(color: Colors.grey)),
+                    Text('POS Multi Branch',
+                        style: TextStyle(color: colorScheme.onSurfaceVariant)),
                     const Divider(),
 
                     // Receipt info
-                    _infoRow('No. Struk', transaction.receiptNumber ?? '-'),
+                    _infoRow('No. Struk', transaction.receiptNumber ?? '-',
+                        colorScheme),
                     _infoRow(
                         'Tanggal',
                         '${transaction.createdAt.day}/${transaction.createdAt.month}/${transaction.createdAt.year} '
                             '${transaction.createdAt.hour.toString().padLeft(2, '0')}:'
-                            '${transaction.createdAt.minute.toString().padLeft(2, '0')}'),
-                    _infoRow('Kasir', transaction.cashierName),
-                    _infoRow('Metode Bayar', transaction.paymentMethod),
+                            '${transaction.createdAt.minute.toString().padLeft(2, '0')}',
+                        colorScheme),
+                    _infoRow('Kasir', transaction.cashierName, colorScheme),
+                    _infoRow('Metode Bayar', transaction.paymentMethod,
+                        colorScheme),
                     const Divider(),
 
                     // Items
@@ -100,15 +120,15 @@ class ReceiptScreen extends StatelessWidget {
                     const Divider(),
 
                     // Totals
-                    _totalRow('Subtotal', transaction.total),
+                    _totalRow('Subtotal', transaction.total, colorScheme),
                     if (transaction.discountTotal > 0)
                       _totalRow('Diskon', -transaction.discountTotal,
-                          color: Colors.red),
-                    _totalRow('Grand Total', transaction.grandTotal,
+                          colorScheme, color: Colors.red),
+                    _totalRow('Grand Total', transaction.grandTotal, colorScheme,
                         bold: true, color: Colors.green),
                     const Divider(),
-                    _totalRow('Bayar', transaction.amountPaid),
-                    _totalRow('Kembali', transaction.change,
+                    _totalRow('Bayar', transaction.amountPaid, colorScheme),
+                    _totalRow('Kembali', transaction.change, colorScheme,
                         bold: true, color: Colors.blue),
                   ],
                 ),
@@ -132,7 +152,6 @@ class ReceiptScreen extends StatelessWidget {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () {
-                      // Share receipt stub
                       Clipboard.setData(ClipboardData(
                           text:
                               'Struk: ${transaction.receiptNumber}\nTotal: Rp ${_formatPrice(transaction.grandTotal)}'));
@@ -152,20 +171,22 @@ class ReceiptScreen extends StatelessWidget {
     );
   }
 
-  Widget _infoRow(String label, String value) {
+  Widget _infoRow(String label, String value, ColorScheme colorScheme) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.grey)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
+          Text(label,
+              style: TextStyle(color: colorScheme.onSurfaceVariant)),
+          Text(value,
+              style: const TextStyle(fontWeight: FontWeight.w500)),
         ],
       ),
     );
   }
 
-  Widget _totalRow(String label, double amount,
+  Widget _totalRow(String label, double amount, ColorScheme colorScheme,
       {bool bold = false, Color? color}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
@@ -179,7 +200,7 @@ class ReceiptScreen extends StatelessWidget {
             'Rp ${_formatPrice(amount)}',
             style: TextStyle(
                 fontWeight: bold ? FontWeight.bold : FontWeight.w500,
-                color: color),
+                color: color ?? colorScheme.onSurface),
           ),
         ],
       ),
@@ -187,9 +208,7 @@ class ReceiptScreen extends StatelessWidget {
   }
 
   String _formatPrice(double amount) {
-    return amount.abs()
-        .toStringAsFixed(0)
-        .replaceAllMapped(
-            RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (match) => '${match.group(1)}.');
+    return amount.abs().toStringAsFixed(0).replaceAllMapped(
+        RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (match) => '${match.group(1)}.');
   }
 }
