@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../models/report.dart';
 import '../providers/report_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/sync_provider.dart';
+import '../widgets/sync_status_widget.dart';
 
 class ReportScreen extends StatefulWidget {
   const ReportScreen({super.key});
@@ -96,6 +98,12 @@ class _ReportScreenState extends State<ReportScreen>
       appBar: AppBar(
         title: const Text('Laporan'),
         actions: [
+          // Sync status
+          IconButton(
+            icon: const SyncStatusIcon(),
+            onPressed: () => Navigator.pushNamed(context, '/sync-status'),
+            tooltip: 'Sync Status',
+          ),
           // Date range picker
           TextButton.icon(
             onPressed: _pickDateRange,

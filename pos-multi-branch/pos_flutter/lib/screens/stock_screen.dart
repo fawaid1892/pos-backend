@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/stock_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/sync_provider.dart';
 import '../models/stock_adjustment.dart';
+import '../widgets/sync_status_widget.dart';
 
 class StockScreen extends StatefulWidget {
   const StockScreen({super.key});
@@ -52,6 +54,12 @@ class _StockScreenState extends State<StockScreen>
       appBar: AppBar(
         title: const Text('Stok Inventory'),
         actions: [
+          // Sync status
+          IconButton(
+            icon: const SyncStatusIcon(),
+            onPressed: () => Navigator.pushNamed(context, '/sync-status'),
+            tooltip: 'Sync Status',
+          ),
           IconButton(
             icon: const Icon(Icons.add_circle_outline),
             tooltip: 'Adjustment Stok',

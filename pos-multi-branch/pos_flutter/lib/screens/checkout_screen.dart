@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/cart_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/sync_provider.dart';
 import '../services/mock_api_service.dart';
+import '../widgets/sync_status_widget.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -98,7 +100,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final cart = context.watch<CartProvider>();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Pembayaran')),
+      appBar: AppBar(
+        title: const Text('Pembayaran'),
+        actions: [
+          IconButton(
+            icon: const SyncStatusIcon(),
+            onPressed: () => Navigator.pushNamed(context, '/sync-status'),
+            tooltip: 'Sync Status',
+          ),
+        ],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(

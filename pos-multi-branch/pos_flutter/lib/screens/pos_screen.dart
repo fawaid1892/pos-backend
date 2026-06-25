@@ -3,9 +3,11 @@ import 'package:provider/provider.dart';
 import '../models/product.dart';
 import '../providers/cart_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/sync_provider.dart';
 import '../services/mock_api_service.dart';
 import '../widgets/product_tile.dart';
 import '../widgets/cart_item_tile.dart';
+import '../widgets/sync_status_widget.dart';
 
 class PosScreen extends StatefulWidget {
   const PosScreen({super.key});
@@ -95,6 +97,41 @@ class _PosScreenState extends State<PosScreen> {
       appBar: AppBar(
         title: Text(auth.branchName ?? 'POS Multi Branch'),
         actions: [
+          // Sync status icon button
+          IconButton(
+            icon: const SyncStatusIcon(),
+            onPressed: () => Navigator.pushNamed(context, '/sync-status'),
+            tooltip: 'Sync Status',
+          ),
+          // Manual sync button
+          Consumer<SyncProvider>(
+            builder: (context, sync, _) => IconButton(
+              icon: sync.isSyncing
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.sync),
+              onPressed: sync.isSyncing
+                  ? null
+                  : () async {
+                      final result = await sync.triggerSync();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(result.success
+                                ? 'Sync selesai: ${result.summary}'
+                                : 'Sync gagal: ${result.error ?? ''}'),
+                            backgroundColor:
+                                result.success ? Colors.green : Colors.red,
+                            duration: const Duration(seconds: 3),
+                          ),
+                        );
+                      }
+                    },
+            ),
+          ),
           IconButton(
             icon: Icon(_showCart ? Icons.search : Icons.shopping_cart),
             onPressed: () => setState(() => _showCart = !_showCart),
