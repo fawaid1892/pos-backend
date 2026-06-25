@@ -256,8 +256,6 @@ const (
 	ExportFormatXLSX ExportFormat = "xlsx"
 	ExportFormatCSV  ExportFormat = "csv"
 )
-<<<<<<< HEAD
-=======
 
 // ─── Generic API Response ───
 
@@ -269,4 +267,3 @@ type APIResponse struct {
 	Data    interface{}             `json:"data,omitempty"`
 	Meta    map[string]interface{} `json:"meta,omitempty"`
 }
->>>>>>> 90c46f770f2582ca6c2d103b433a1a70dc1620f9

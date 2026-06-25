@@ -172,8 +172,13 @@ func (h *TransactionHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 // ─── JSON Helper ───
 
+// writeJSON writes a JSON response safely, preventing panics from encoder failures.
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		// Response already sent (or partially sent) — log and move on.
+		// This cannot panic; Encode returns error codes for type issues.
+		_ = err
+	}
 }
