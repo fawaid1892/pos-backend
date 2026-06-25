@@ -21,6 +21,7 @@ const (
 	EventTransactionCreated = "transaction.created"
 	EventStockAdjusted      = "stock.adjusted"
 	EventStockTransferred   = "stock.transferred"
+	EventStockLow           = "stock.low"
 	EventSyncRequired       = "sync.required"
 )
 

@@ -87,6 +87,9 @@ func (h *StockHandler) Adjustment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, bp)
+
+	// Check & broadcast low stock
+	go checkAndBroadcastLowStock(r.Context(), branchID)
 }
 
 // POST /api/v1/inventory/transfer
@@ -149,4 +152,32 @@ func (h *StockHandler) ListInventory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, response)
+}
+
+// GET /api/v1/branches/{id}/inventory/low-stock?threshold=5
+func (h *StockHandler) LowStock(w http.ResponseWriter, r *http.Request) {
+	branchID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid branch id"})
+		return
+	}
+
+	thresholdStr := r.URL.Query().Get("threshold")
+	threshold := 5.0
+	if thresholdStr != "" {
+		if t, err := strconv.ParseFloat(thresholdStr, 64); err == nil && t > 0 {
+			threshold = t
+		}
+	}
+
+	items, err := repository.GetLowStockProducts(r.Context(), branchID, threshold)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if items == nil {
+		items = []model.LowStockItem{}
+	}
+
+	writeJSON(w, http.StatusOK, items)
 }

@@ -116,6 +116,8 @@ type Transaction struct {
 	Total           float64    `json:"total"`
 	CashAmount      float64    `json:"cash_amount"`
 	ChangeAmount    float64    `json:"change_amount"`
+	PaymentMethod    string     `json:"payment_method"`
+	PaymentReference string     `json:"payment_reference,omitempty"`
 	Items           []TransactionItem `json:"items,omitempty"`
 	CreatedAt       time.Time  `json:"created_at"`
 }
@@ -131,11 +133,13 @@ type TransactionItem struct {
 }
 
 type CheckoutRequest struct {
-	BranchID        uuid.UUID         `json:"branch_id"`
-	CustomerName    string            `json:"customer_name"`
-	DiscountPercent float64           `json:"discount_percent"`
-	CashAmount      float64           `json:"cash_amount"`
-	Items           []CheckoutItemReq `json:"items"`
+	BranchID         uuid.UUID         `json:"branch_id"`
+	CustomerName     string            `json:"customer_name"`
+	DiscountPercent  float64           `json:"discount_percent"`
+	PaymentMethod    string            `json:"payment_method"`
+	PaymentReference string            `json:"payment_reference,omitempty"`
+	CashAmount       float64           `json:"cash_amount"`
+	Items            []CheckoutItemReq `json:"items"`
 }
 
 type CheckoutItemReq struct {
@@ -207,6 +211,27 @@ type StockReportRow struct {
 	CurrentStock  float64   `json:"current_stock"`
 	MinStock      float64   `json:"min_stock,omitempty"`
 	LastMutation  *time.Time `json:"last_mutation,omitempty"`
+}
+
+// ─── Low Stock ───
+
+type LowStockItem struct {
+	ProductName string  `json:"product_name"`
+	BranchName  string  `json:"branch_name"`
+	StockQty    float64 `json:"stock_qty"`
+	MinStock    float64 `json:"min_stock"`
+}
+
+// ─── PDF Export ───
+
+type SalesPDFRow struct {
+	Date        string  `json:"date"`
+	ProductName string  `json:"product_name"`
+	Quantity    int     `json:"quantity"`
+	Price       float64 `json:"price"`
+	Subtotal    float64 `json:"subtotal"`
+	TaxAmount   float64 `json:"tax_amount"`
+	Total       float64 `json:"total"`
 }
 
 type ProfitLossRow struct {
