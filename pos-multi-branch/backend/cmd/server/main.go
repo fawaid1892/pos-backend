@@ -36,6 +36,7 @@ func main() {
 	productH := handler.NewProductHandler()
 	txH := handler.NewTransactionHandler()
 	stockH := handler.NewStockHandler()
+	userH := handler.NewUserHandler()
 	reportH := handler.NewReportHandler()
 	exportH := handler.NewExportHandler()
 	syncH := handler.NewSyncHandler(sqliteDB.DB)
@@ -94,6 +95,12 @@ func main() {
 
 	// Export
 	protected.HandleFunc("GET /api/v1/branches/{id}/reports/sales/export", exportH.SalesExport)
+
+	// Users (owner-managed)
+	protected.HandleFunc("GET /api/v1/users", userH.List)
+	protected.HandleFunc("POST /api/v1/users", userH.Create)
+	protected.HandleFunc("PUT /api/v1/users/{id}", userH.Update)
+	protected.HandleFunc("DELETE /api/v1/users/{id}", userH.Delete)
 
 	// Sync endpoints (authenticated — branches push/pull using their own credentials)
 	protected.HandleFunc("POST /api/v1/sync/push", syncH.Push)

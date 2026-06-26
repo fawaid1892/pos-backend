@@ -8,14 +8,16 @@ import (
 
 // User
 type User struct {
-	ID        uuid.UUID `json:"id"`
-	Username  string    `json:"username"`
-	Password  string    `json:"-"`
-	FullName  string    `json:"full_name"`
-	Role      string    `json:"role"` // admin, kasir, owner
+	ID        uuid.UUID  `json:"id"`
+	Username  string     `json:"username"`
+	Password  string     `json:"-"`
+	FullName  string     `json:"full_name"`
+	Role      string     `json:"role"` // admin, kasir, owner
 	BranchID  *uuid.UUID `json:"branch_id,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	IsActive  bool       `json:"is_active"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 }
 
 type LoginRequest struct {
@@ -30,6 +32,26 @@ type LoginResponse struct {
 
 type MeResponse struct {
 	User User `json:"user"`
+}
+
+type CreateUserRequest struct {
+	Username string     `json:"username"`
+	Password string     `json:"password"`
+	FullName string     `json:"full_name"`
+	Role     string     `json:"role"`
+	BranchID *uuid.UUID `json:"branch_id,omitempty"`
+}
+
+type UpdateUserRequest struct {
+	FullName *string     `json:"full_name,omitempty"`
+	Role     *string     `json:"role,omitempty"`
+	BranchID **uuid.UUID `json:"branch_id,omitempty"`
+	IsActive *bool       `json:"is_active,omitempty"`
+}
+
+type UserListResponse struct {
+	Users []User `json:"users"`
+	Total int    `json:"total"`
 }
 
 // Branch
@@ -67,16 +89,16 @@ type Category struct {
 
 // Product
 type Product struct {
-	ID          uuid.UUID  `json:"id"`
-	CategoryID  uuid.UUID  `json:"category_id"`
-	CategoryName string    `json:"category_name,omitempty"`
-	Name        string     `json:"name"`
-	Barcode     string     `json:"barcode"`
-	Price       float64    `json:"price"`
-	Stock       int        `json:"stock"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-	DeletedAt   *time.Time `json:"deleted_at,omitempty"`
+	ID           uuid.UUID  `json:"id"`
+	CategoryID   uuid.UUID  `json:"category_id"`
+	CategoryName string     `json:"category_name,omitempty"`
+	Name         string     `json:"name"`
+	Barcode      string     `json:"barcode"`
+	Price        float64    `json:"price"`
+	Stock        int        `json:"stock"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+	DeletedAt    *time.Time `json:"deleted_at,omitempty"`
 }
 
 type CreateProductRequest struct {
@@ -104,32 +126,32 @@ type ProductSearchParams struct {
 
 // Transaction
 type Transaction struct {
-	ID              uuid.UUID  `json:"id"`
-	BranchID        uuid.UUID  `json:"branch_id"`
-	UserID          uuid.UUID  `json:"user_id"`
-	CustomerName    string     `json:"customer_name"`
-	Subtotal        float64    `json:"subtotal"`
-	DiscountPercent float64    `json:"discount_percent"`
-	DiscountAmount  float64    `json:"discount_amount"`
-	TaxRate         float64    `json:"tax_rate"`
-	TaxAmount       float64    `json:"tax_amount"`
-	Total           float64    `json:"total"`
-	CashAmount      float64    `json:"cash_amount"`
-	ChangeAmount    float64    `json:"change_amount"`
-	PaymentMethod    string     `json:"payment_method"`
-	PaymentReference string     `json:"payment_reference,omitempty"`
-	Items           []TransactionItem `json:"items,omitempty"`
-	CreatedAt       time.Time  `json:"created_at"`
+	ID               uuid.UUID         `json:"id"`
+	BranchID         uuid.UUID         `json:"branch_id"`
+	UserID           uuid.UUID         `json:"user_id"`
+	CustomerName     string            `json:"customer_name"`
+	Subtotal         float64           `json:"subtotal"`
+	DiscountPercent  float64           `json:"discount_percent"`
+	DiscountAmount   float64           `json:"discount_amount"`
+	TaxRate          float64           `json:"tax_rate"`
+	TaxAmount        float64           `json:"tax_amount"`
+	Total            float64           `json:"total"`
+	CashAmount       float64           `json:"cash_amount"`
+	ChangeAmount     float64           `json:"change_amount"`
+	PaymentMethod    string            `json:"payment_method"`
+	PaymentReference string            `json:"payment_reference,omitempty"`
+	Items            []TransactionItem `json:"items,omitempty"`
+	CreatedAt        time.Time         `json:"created_at"`
 }
 
 type TransactionItem struct {
-	ID          uuid.UUID `json:"id"`
+	ID            uuid.UUID `json:"id"`
 	TransactionID uuid.UUID `json:"transaction_id"`
-	ProductID   uuid.UUID `json:"product_id"`
-	ProductName string    `json:"product_name"`
-	Quantity    int       `json:"quantity"`
-	Price       float64   `json:"price"`
-	Subtotal    float64   `json:"subtotal"`
+	ProductID     uuid.UUID `json:"product_id"`
+	ProductName   string    `json:"product_name"`
+	Quantity      int       `json:"quantity"`
+	Price         float64   `json:"price"`
+	Subtotal      float64   `json:"subtotal"`
 }
 
 type CheckoutRequest struct {
@@ -157,10 +179,10 @@ type BranchProduct struct {
 	UpdatedAt time.Time `json:"updated_at"`
 
 	// Joined fields
-	ProductName string `json:"product_name,omitempty"`
-	Barcode     string `json:"barcode,omitempty"`
-	Price       float64 `json:"price,omitempty"`
-	CategoryName string `json:"category_name,omitempty"`
+	ProductName  string  `json:"product_name,omitempty"`
+	Barcode      string  `json:"barcode,omitempty"`
+	Price        float64 `json:"price,omitempty"`
+	CategoryName string  `json:"category_name,omitempty"`
 }
 
 type StockMutation struct {
@@ -186,31 +208,31 @@ type StockAdjustmentRequest struct {
 }
 
 type StockTransferRequest struct {
-	ProductID    uuid.UUID `json:"product_id"`
+	ProductID      uuid.UUID `json:"product_id"`
 	SourceBranchID uuid.UUID `json:"source_branch_id"`
 	TargetBranchID uuid.UUID `json:"target_branch_id"`
-	Qty         float64   `json:"qty"`
-	Notes       string    `json:"notes,omitempty"`
+	Qty            float64   `json:"qty"`
+	Notes          string    `json:"notes,omitempty"`
 }
 
 // ─── Reports ───
 
 type SalesReportRow struct {
-	Date        string  `json:"date"`
-	TransactionCount int `json:"transaction_count"`
-	Subtotal    float64 `json:"subtotal"`
-	Discount    float64 `json:"discount"`
-	Total       float64 `json:"total"`
+	Date             string  `json:"date"`
+	TransactionCount int     `json:"transaction_count"`
+	Subtotal         float64 `json:"subtotal"`
+	Discount         float64 `json:"discount"`
+	Total            float64 `json:"total"`
 }
 
 type StockReportRow struct {
-	ProductID     uuid.UUID `json:"product_id"`
-	ProductName   string    `json:"product_name"`
-	Barcode       string    `json:"barcode"`
-	CategoryName  string    `json:"category_name"`
-	CurrentStock  float64   `json:"current_stock"`
-	MinStock      float64   `json:"min_stock,omitempty"`
-	LastMutation  *time.Time `json:"last_mutation,omitempty"`
+	ProductID    uuid.UUID  `json:"product_id"`
+	ProductName  string     `json:"product_name"`
+	Barcode      string     `json:"barcode"`
+	CategoryName string     `json:"category_name"`
+	CurrentStock float64    `json:"current_stock"`
+	MinStock     float64    `json:"min_stock,omitempty"`
+	LastMutation *time.Time `json:"last_mutation,omitempty"`
 }
 
 // ─── Low Stock ───
@@ -235,12 +257,12 @@ type SalesPDFRow struct {
 }
 
 type ProfitLossRow struct {
-	ProductID   uuid.UUID  `json:"product_id"`
-	ProductName string     `json:"product_name"`
-	QtySold     int        `json:"qty_sold"`
-	Revenue     float64    `json:"revenue"`
-	Cost        float64    `json:"cost"`
-	Profit      float64    `json:"profit"`
+	ProductID   uuid.UUID `json:"product_id"`
+	ProductName string    `json:"product_name"`
+	QtySold     int       `json:"qty_sold"`
+	Revenue     float64   `json:"revenue"`
+	Cost        float64   `json:"cost"`
+	Profit      float64   `json:"profit"`
 }
 
 type ProfitLossSummary struct {
@@ -254,11 +276,11 @@ type SalesReportResponse struct {
 		Start string `json:"start"`
 		End   string `json:"end"`
 	} `json:"period"`
-	Rows       []SalesReportRow `json:"rows"`
-	TotalSales float64          `json:"total_sales"`
-	TotalDiscount float64      `json:"total_discount"`
-	TotalNet   float64          `json:"total_net"`
-	TotalTransactions int       `json:"total_transactions"`
+	Rows              []SalesReportRow `json:"rows"`
+	TotalSales        float64          `json:"total_sales"`
+	TotalDiscount     float64          `json:"total_discount"`
+	TotalNet          float64          `json:"total_net"`
+	TotalTransactions int              `json:"total_transactions"`
 }
 
 type StockReportResponse struct {
@@ -271,7 +293,7 @@ type ProfitLossReportResponse struct {
 		Start string `json:"start"`
 		End   string `json:"end"`
 	} `json:"period"`
-	Rows    []ProfitLossRow  `json:"rows"`
+	Rows    []ProfitLossRow   `json:"rows"`
 	Summary ProfitLossSummary `json:"summary"`
 }
 
@@ -289,9 +311,9 @@ const (
 
 // APIResponse is a generic JSON response wrapper.
 type APIResponse struct {
-	Success bool                    `json:"success"`
-	Message string                  `json:"message,omitempty"`
-	Error   string                  `json:"error,omitempty"`
-	Data    interface{}             `json:"data,omitempty"`
+	Success bool                   `json:"success"`
+	Message string                 `json:"message,omitempty"`
+	Error   string                 `json:"error,omitempty"`
+	Data    interface{}            `json:"data,omitempty"`
 	Meta    map[string]interface{} `json:"meta,omitempty"`
 }

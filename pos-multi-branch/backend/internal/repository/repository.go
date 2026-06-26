@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"pos-multi-branch/backend/internal/database"
@@ -48,6 +49,133 @@ func FindUserByID(ctx context.Context, id uuid.UUID) (*model.User, error) {
 
 func VerifyPassword(hashed, plain string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hashed), []byte(plain)) == nil
+}
+
+func HashPassword(plain string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(plain), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(bytes), nil
+}
+
+func ListUsers(ctx context.Context, branchID *uuid.UUID) ([]model.User, error) {
+	query := `SELECT id, username, full_name, role, branch_id, is_active, created_at, updated_at
+			  FROM users WHERE deleted_at IS NULL`
+	args := []interface{}{}
+	argIdx := 1
+
+	if branchID != nil {
+		query += fmt.Sprintf(" AND (branch_id = $%d OR role = 'owner')", argIdx)
+		args = append(args, *branchID)
+		argIdx++
+	}
+	query += " ORDER BY created_at DESC"
+
+	rows, err := database.Pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []model.User
+	for rows.Next() {
+		var u model.User
+		if err := rows.Scan(&u.ID, &u.Username, &u.FullName, &u.Role, &u.BranchID, &u.IsActive, &u.CreatedAt, &u.UpdatedAt); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, nil
+}
+
+func CreateUser(ctx context.Context, req model.CreateUserRequest) (*model.User, error) {
+	hashed, err := HashPassword(req.Password)
+	if err != nil {
+		return nil, err
+	}
+
+	u := &model.User{}
+	err = database.Pool.QueryRow(ctx,
+		`INSERT INTO users (username, password, full_name, role, branch_id, is_active)
+		 VALUES ($1,$2,$3,$4,$5,true)
+		 RETURNING id, username, full_name, role, branch_id, is_active, created_at, updated_at`,
+		req.Username, hashed, req.FullName, req.Role, req.BranchID,
+	).Scan(&u.ID, &u.Username, &u.FullName, &u.Role, &u.BranchID, &u.IsActive, &u.CreatedAt, &u.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return u, nil
+}
+
+func UpdateUser(ctx context.Context, id uuid.UUID, req model.UpdateUserRequest) (*model.User, error) {
+	setClauses := []string{}
+	args := []interface{}{}
+	argIdx := 1
+
+	if req.FullName != nil {
+		setClauses = append(setClauses, fmt.Sprintf("full_name = $%d", argIdx))
+		args = append(args, *req.FullName)
+		argIdx++
+	}
+	if req.Role != nil {
+		setClauses = append(setClauses, fmt.Sprintf("role = $%d", argIdx))
+		args = append(args, *req.Role)
+		argIdx++
+	}
+	if req.IsActive != nil {
+		setClauses = append(setClauses, fmt.Sprintf("is_active = $%d", argIdx))
+		args = append(args, *req.IsActive)
+		argIdx++
+	}
+	if req.BranchID != nil {
+		if *req.BranchID == nil {
+			setClauses = append(setClauses, fmt.Sprintf("branch_id = $%d", argIdx))
+			args = append(args, nil)
+			argIdx++
+		} else {
+			setClauses = append(setClauses, fmt.Sprintf("branch_id = $%d", argIdx))
+			args = append(args, **req.BranchID)
+			argIdx++
+		}
+	}
+
+	if len(setClauses) == 0 {
+		return nil, errors.New("no fields to update")
+	}
+
+	setClauses = append(setClauses, fmt.Sprintf("updated_at = NOW()"))
+	args = append(args, id)
+
+	query := fmt.Sprintf(`UPDATE users SET %s
+		WHERE id = $%d AND deleted_at IS NULL
+		RETURNING id, username, full_name, role, branch_id, is_active, created_at, updated_at`,
+		strings.Join(setClauses, ", "), argIdx)
+
+	u := &model.User{}
+	err := database.Pool.QueryRow(ctx, query, args...).Scan(
+		&u.ID, &u.Username, &u.FullName, &u.Role, &u.BranchID, &u.IsActive, &u.CreatedAt, &u.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return u, nil
+}
+
+func SoftDeleteUser(ctx context.Context, id uuid.UUID) error {
+	tag, err := database.Pool.Exec(ctx,
+		`UPDATE users SET deleted_at=$1, is_active=false WHERE id=$2 AND deleted_at IS NULL`,
+		time.Now(), id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return errors.New("user not found")
+	}
+	return nil
 }
 
 // ─── Branch ───
@@ -698,15 +826,15 @@ func GetProfitLossReport(ctx context.Context, branchID uuid.UUID, start, end tim
 // ─── Export ───
 
 type SalesExportRow struct {
-	Date        string  `json:"date"`
-	CustomerName string `json:"customer_name"`
-	Items       string  `json:"items"`
-	Subtotal    float64 `json:"subtotal"`
-	Discount    float64 `json:"discount"`
-	TaxAmount   float64 `json:"tax_amount"`
-	Total       float64 `json:"total"`
-	Cash        float64 `json:"cash"`
-	Change      float64 `json:"change"`
+	Date         string  `json:"date"`
+	CustomerName string  `json:"customer_name"`
+	Items        string  `json:"items"`
+	Subtotal     float64 `json:"subtotal"`
+	Discount     float64 `json:"discount"`
+	TaxAmount    float64 `json:"tax_amount"`
+	Total        float64 `json:"total"`
+	Cash         float64 `json:"cash"`
+	Change       float64 `json:"change"`
 }
 
 func GetSalesExportData(ctx context.Context, branchID uuid.UUID, start, end time.Time) ([]SalesExportRow, error) {
