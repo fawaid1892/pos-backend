@@ -73,6 +73,7 @@ type Product struct {
 	Name        string     `json:"name"`
 	Barcode     string     `json:"barcode"`
 	Price       float64    `json:"price"`
+	CostPrice   float64    `json:"cost_price"`
 	Stock       int        `json:"stock"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
@@ -84,6 +85,7 @@ type CreateProductRequest struct {
 	Name       string    `json:"name"`
 	Barcode    string    `json:"barcode"`
 	Price      float64   `json:"price"`
+	CostPrice  float64   `json:"cost_price"`
 	Stock      int       `json:"stock"`
 }
 
@@ -92,6 +94,7 @@ type UpdateProductRequest struct {
 	Name       string    `json:"name"`
 	Barcode    string    `json:"barcode"`
 	Price      float64   `json:"price"`
+	CostPrice  float64   `json:"cost_price"`
 	Stock      int       `json:"stock"`
 }
 
@@ -157,9 +160,10 @@ type BranchProduct struct {
 	UpdatedAt time.Time `json:"updated_at"`
 
 	// Joined fields
-	ProductName string `json:"product_name,omitempty"`
-	Barcode     string `json:"barcode,omitempty"`
+	ProductName string  `json:"product_name,omitempty"`
+	Barcode     string  `json:"barcode,omitempty"`
 	Price       float64 `json:"price,omitempty"`
+	CostPrice   float64 `json:"cost_price,omitempty"`
 	CategoryName string `json:"category_name,omitempty"`
 }
 

@@ -194,7 +194,7 @@ func ListProducts(ctx context.Context, p ListProductsParams) ([]model.Product, e
 
 	query := fmt.Sprintf(`
 		SELECT p.id, p.category_id, COALESCE(c.name,'') as category_name,
-		       p.name, p.barcode, p.price, p.stock,
+		       p.name, p.barcode, p.price, COALESCE(p.cost_price, 0), p.stock,
 		       p.created_at, p.updated_at, p.deleted_at
 		FROM products p
 		LEFT JOIN categories c ON c.id = p.category_id
@@ -214,7 +214,7 @@ func ListProducts(ctx context.Context, p ListProductsParams) ([]model.Product, e
 	for rows.Next() {
 		var pr model.Product
 		if err := rows.Scan(&pr.ID, &pr.CategoryID, &pr.CategoryName, &pr.Name, &pr.Barcode,
-			&pr.Price, &pr.Stock, &pr.CreatedAt, &pr.UpdatedAt, &pr.DeletedAt); err != nil {
+			&pr.Price, &pr.CostPrice, &pr.Stock, &pr.CreatedAt, &pr.UpdatedAt, &pr.DeletedAt); err != nil {
 			return nil, err
 		}
 		products = append(products, pr)
@@ -226,12 +226,12 @@ func GetProductByID(ctx context.Context, id uuid.UUID) (*model.Product, error) {
 	p := &model.Product{}
 	err := database.Pool.QueryRow(ctx,
 		`SELECT p.id, p.category_id, COALESCE(c.name,'') as category_name,
-		        p.name, p.barcode, p.price, p.stock,
+		        p.name, p.barcode, p.price, COALESCE(p.cost_price, 0), p.stock,
 		        p.created_at, p.updated_at, p.deleted_at
 		 FROM products p
 		 LEFT JOIN categories c ON c.id = p.category_id
 		 WHERE p.id = $1 AND p.deleted_at IS NULL`, id,
-	).Scan(&p.ID, &p.CategoryID, &p.CategoryName, &p.Name, &p.Barcode, &p.Price, &p.Stock, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt)
+	).Scan(&p.ID, &p.CategoryID, &p.CategoryName, &p.Name, &p.Barcode, &p.Price, &p.CostPrice, &p.Stock, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -244,11 +244,11 @@ func GetProductByID(ctx context.Context, id uuid.UUID) (*model.Product, error) {
 func CreateProduct(ctx context.Context, req model.CreateProductRequest) (*model.Product, error) {
 	p := &model.Product{}
 	err := database.Pool.QueryRow(ctx,
-		`INSERT INTO products (category_id, name, barcode, price, stock)
-		 VALUES ($1,$2,$3,$4,$5)
-		 RETURNING id, category_id, name, barcode, price, stock, created_at, updated_at, deleted_at`,
-		req.CategoryID, req.Name, req.Barcode, req.Price, req.Stock,
-	).Scan(&p.ID, &p.CategoryID, &p.Name, &p.Barcode, &p.Price, &p.Stock, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt)
+		`INSERT INTO products (category_id, name, barcode, price, cost_price, stock)
+		 VALUES ($1,$2,$3,$4,$5,$6)
+		 RETURNING id, category_id, name, barcode, price, cost_price, stock, created_at, updated_at, deleted_at`,
+		req.CategoryID, req.Name, req.Barcode, req.Price, req.CostPrice, req.Stock,
+	).Scan(&p.ID, &p.CategoryID, &p.Name, &p.Barcode, &p.Price, &p.CostPrice, &p.Stock, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -258,11 +258,11 @@ func CreateProduct(ctx context.Context, req model.CreateProductRequest) (*model.
 func UpdateProduct(ctx context.Context, id uuid.UUID, req model.UpdateProductRequest) (*model.Product, error) {
 	p := &model.Product{}
 	err := database.Pool.QueryRow(ctx,
-		`UPDATE products SET category_id=$1, name=$2, barcode=$3, price=$4, stock=$5, updated_at=NOW()
-		 WHERE id=$6 AND deleted_at IS NULL
-		 RETURNING id, category_id, name, barcode, price, stock, created_at, updated_at, deleted_at`,
-		req.CategoryID, req.Name, req.Barcode, req.Price, req.Stock, id,
-	).Scan(&p.ID, &p.CategoryID, &p.Name, &p.Barcode, &p.Price, &p.Stock, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt)
+		`UPDATE products SET category_id=$1, name=$2, barcode=$3, price=$4, cost_price=$5, stock=$6, updated_at=NOW()
+		 WHERE id=$7 AND deleted_at IS NULL
+		 RETURNING id, category_id, name, barcode, price, cost_price, stock, created_at, updated_at, deleted_at`,
+		req.CategoryID, req.Name, req.Barcode, req.Price, req.CostPrice, req.Stock, id,
+	).Scan(&p.ID, &p.CategoryID, &p.Name, &p.Barcode, &p.Price, &p.CostPrice, &p.Stock, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -665,8 +665,8 @@ func GetProfitLossReport(ctx context.Context, branchID uuid.UUID, start, end tim
 		`SELECT ti.product_id, p.name,
 		        SUM(ti.quantity)::INT as qty_sold,
 		        COALESCE(SUM(ti.subtotal), 0) as revenue,
-		        COALESCE(SUM(ti.quantity * p.price * 0.7), 0) as cost,
-		        COALESCE(SUM(ti.subtotal - ti.quantity * p.price * 0.7), 0) as profit
+		        COALESCE(SUM(ti.quantity * COALESCE(NULLIF(p.cost_price, 0), p.price * 0.7)), 0) as cost,
+		        COALESCE(SUM(ti.subtotal - ti.quantity * COALESCE(NULLIF(p.cost_price, 0), p.price * 0.7)), 0) as profit
 		 FROM transaction_items ti
 		 JOIN transactions t ON t.id = ti.transaction_id
 		 JOIN products p ON p.id = ti.product_id
