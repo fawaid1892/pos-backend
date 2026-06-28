@@ -6,6 +6,7 @@ import (
 
 	"pos-multi-branch/backend/internal/config"
 	"pos-multi-branch/backend/internal/database"
+	"pos-multi-branch/backend/internal/electric"
 	"pos-multi-branch/backend/internal/handler"
 	"pos-multi-branch/backend/internal/middleware"
 	"pos-multi-branch/backend/internal/ws"
@@ -22,6 +23,11 @@ func main() {
 
 	log.Printf("ElectricSQL URL: %s", cfg.ElectricURL)
 
+	// ─── ElectricSQL shapes ───
+	if err := electric.InitShapes(cfg.ElectricURL); err != nil {
+		log.Printf("[electric] failed to init shapes: %v", err)
+	}
+
 	// JWT
 	middleware.InitJWT(cfg)
 
@@ -35,6 +41,7 @@ func main() {
 	exportH := handler.NewExportHandler()
 	userH := handler.NewUserHandler()
 	dashboardH := handler.NewDashboardHandler()
+	electricH := handler.NewElectricHandler()
 
 	// WebSocket hub for realtime notifications
 	wsHub := ws.NewHub()
@@ -106,6 +113,9 @@ func main() {
 	// Dashboard
 	protected.HandleFunc("GET /api/v1/dashboard/stats", dashboardH.DashboardStats)
 	protected.HandleFunc("GET /api/v1/dashboard/sales-chart", dashboardH.SalesChart)
+
+	// ElectricSQL shape status
+	protected.HandleFunc("GET /api/v1/electric/shapes", electricH.Shapes)
 
 	mux.Handle("/api/v1/", middleware.AuthMiddleware(protected))
 
