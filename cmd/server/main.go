@@ -40,6 +40,7 @@ func main() {
 	exportH := handler.NewExportHandler()
 	userH := handler.NewUserHandler()
 	syncH := handler.NewSyncHandler(sqliteDB.DB)
+	dashboardH := handler.NewDashboardHandler()
 
 	// WebSocket hub for realtime notifications
 	wsHub := ws.NewHub()
@@ -107,6 +108,10 @@ func main() {
 	protected.HandleFunc("POST /api/v1/sync/push", syncH.Push)
 	protected.HandleFunc("GET /api/v1/sync/pull", syncH.Pull)
 	protected.HandleFunc("POST /api/v1/sync/resolve", syncH.Resolve)
+
+	// Dashboard
+	protected.HandleFunc("GET /api/v1/dashboard/stats", dashboardH.DashboardStats)
+	protected.HandleFunc("GET /api/v1/dashboard/sales-chart", dashboardH.SalesChart)
 
 	mux.Handle("/api/v1/", middleware.AuthMiddleware(protected))
 

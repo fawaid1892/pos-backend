@@ -289,6 +289,29 @@ const (
 	ExportFormatCSV  ExportFormat = "csv"
 )
 
+// ─── Dashboard ───
+
+type DashboardStatsResponse struct {
+	TodayRevenue      float64 `json:"today_revenue"`
+	TotalTransactions int     `json:"total_transactions"`
+	ActiveBranches    int     `json:"active_branches"`
+	LowStockItems     int     `json:"low_stock_items"`
+}
+
+type SalesChartRow struct {
+	Date  string  `json:"date"`
+	Total float64 `json:"total"`
+	Count int     `json:"count"`
+}
+
+type SalesChartResponse struct {
+	Period struct {
+		Start string `json:"start"`
+		End   string `json:"end"`
+	} `json:"period"`
+	Rows []SalesChartRow `json:"rows"`
+}
+
 // ─── Generic API Response ───
 
 // APIResponse is a generic JSON response wrapper.

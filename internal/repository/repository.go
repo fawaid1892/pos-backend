@@ -815,6 +815,79 @@ func GetSalesPDFData(ctx context.Context, branchID uuid.UUID, start, end time.Ti
 	return items, nil
 }
 
+// ─── Dashboard ───
+
+func GetDashboardStats(ctx context.Context, branchID uuid.UUID) (*model.DashboardStatsResponse, error) {
+	resp := &model.DashboardStatsResponse{}
+
+	err := database.Pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(total), 0) FROM transactions WHERE created_at >= CURRENT_DATE AND branch_id = $1`,
+		branchID,
+	).Scan(&resp.TodayRevenue)
+	if err != nil {
+		return nil, err
+	}
+
+	err = database.Pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM transactions WHERE created_at >= CURRENT_DATE AND branch_id = $1`,
+		branchID,
+	).Scan(&resp.TotalTransactions)
+	if err != nil {
+		return nil, err
+	}
+
+	err = database.Pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM branches WHERE deleted_at IS NULL AND is_active = true`,
+	).Scan(&resp.ActiveBranches)
+	if err != nil {
+		return nil, err
+	}
+
+	err = database.Pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM branch_products WHERE stock_qty > 0 AND stock_qty <= min_stock AND branch_id = $1`,
+		branchID,
+	).Scan(&resp.LowStockItems)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+func GetSalesChartData(ctx context.Context, branchID uuid.UUID, start, end time.Time) (*model.SalesChartResponse, error) {
+	resp := &model.SalesChartResponse{}
+	resp.Period.Start = start.Format("2006-01-02")
+	resp.Period.End = end.Format("2006-01-02")
+
+	rows, err := database.Pool.Query(ctx,
+		`SELECT DATE(created_at)::TEXT as day,
+		        COALESCE(SUM(total), 0) as total,
+		        COUNT(*)::INT as count
+		 FROM transactions
+		 WHERE branch_id = $1 AND created_at >= $2 AND created_at < $3
+		 GROUP BY DATE(created_at)
+		 ORDER BY day`,
+		branchID, start, end,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var r model.SalesChartRow
+		if err := rows.Scan(&r.Date, &r.Total, &r.Count); err != nil {
+			return nil, err
+		}
+		resp.Rows = append(resp.Rows, r)
+	}
+	if resp.Rows == nil {
+		resp.Rows = []model.SalesChartRow{}
+	}
+
+	return resp, nil
+}
+
 // ─── User Management ───
 
 type ListUsersParams struct {
