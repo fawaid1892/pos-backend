@@ -7,6 +7,7 @@ import (
 
 	"pos-multi-branch/backend/internal/model"
 	"pos-multi-branch/backend/internal/repository"
+	"pos-multi-branch/backend/internal/ws"
 
 	"github.com/google/uuid"
 )
@@ -88,6 +89,18 @@ func (h *StockHandler) Adjustment(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, bp)
 
+	// ── Broadcast stock.adjusted event via WebSocket ──
+	if ws.DefaultHub != nil {
+		ws.DefaultHub.BroadcastEventToBranch(int64(0), ws.Event{
+			Type: ws.EventStockAdjusted,
+			Payload: map[string]interface{}{
+				"product_id": req.ProductID.String(),
+				"type":       req.Type,
+				"qty":        req.Qty,
+			},
+		})
+	}
+
 	// Check & broadcast low stock
 	go checkAndBroadcastLowStock(r.Context(), branchID)
 }
@@ -118,6 +131,19 @@ func (h *StockHandler) Transfer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "transfer successful"})
+
+	// ── Broadcast stock.transferred event via WebSocket ──
+	if ws.DefaultHub != nil {
+		ws.DefaultHub.BroadcastEvent(ws.Event{
+			Type: ws.EventStockTransferred,
+			Payload: map[string]interface{}{
+				"product_id":       req.ProductID.String(),
+				"source_branch_id": req.SourceBranchID.String(),
+				"target_branch_id": req.TargetBranchID.String(),
+				"qty":              req.Qty,
+			},
+		})
+	}
 }
 
 // GET /api/v1/branches/{id}/inventory

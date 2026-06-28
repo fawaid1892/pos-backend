@@ -228,6 +228,20 @@ func (h *TransactionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ── Broadcast transaction.created event via WebSocket ──
+	if ws.DefaultHub != nil {
+		ws.DefaultHub.BroadcastEvent(ws.Event{
+			Type: ws.EventTransactionCreated,
+			Payload: map[string]interface{}{
+				"transaction_id": txData.ID.String(),
+				"branch_id":      txData.BranchID.String(),
+				"total":          txData.Total,
+				"items_count":    len(items),
+				"created_at":     txData.CreatedAt,
+			},
+		})
+	}
+
 	txData.Items = items
 	writeJSON(w, http.StatusCreated, txData)
 
