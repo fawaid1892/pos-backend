@@ -814,3 +814,182 @@ func GetSalesPDFData(ctx context.Context, branchID uuid.UUID, start, end time.Ti
 	}
 	return items, nil
 }
+
+// ─── User Management ───
+
+type ListUsersParams struct {
+	Page     int
+	Limit    int
+	Role     string
+	BranchID *uuid.UUID
+}
+
+func ListUsers(ctx context.Context, p ListUsersParams) ([]model.User, int, error) {
+	where := "u.deleted_at IS NULL"
+	args := []interface{}{}
+	argIdx := 1
+
+	if p.Role != "" {
+		where += fmt.Sprintf(" AND u.role = $%d", argIdx)
+		args = append(args, p.Role)
+		argIdx++
+	}
+	if p.BranchID != nil {
+		where += fmt.Sprintf(" AND u.branch_id = $%d", argIdx)
+		args = append(args, *p.BranchID)
+		argIdx++
+	}
+
+	if p.Limit <= 0 || p.Limit > 100 {
+		p.Limit = 20
+	}
+	if p.Page <= 0 {
+		p.Page = 1
+	}
+	offset := (p.Page - 1) * p.Limit
+
+	// Count total
+	var total int
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM users u WHERE %s", where)
+	err := database.Pool.QueryRow(ctx, countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Fetch data
+	query := fmt.Sprintf(`
+		SELECT u.id, u.username, '', u.full_name, u.role, u.branch_id, u.created_at, u.updated_at
+		FROM users u
+		WHERE %s
+		ORDER BY u.full_name
+		LIMIT $%d OFFSET $%d`, where, argIdx, argIdx+1)
+
+	args = append(args, p.Limit, offset)
+
+	rows, err := database.Pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var users []model.User
+	for rows.Next() {
+		var u model.User
+		if err := rows.Scan(&u.ID, &u.Username, &u.Password, &u.FullName, &u.Role, &u.BranchID, &u.CreatedAt, &u.UpdatedAt); err != nil {
+			return nil, 0, err
+		}
+		users = append(users, u)
+	}
+	return users, total, nil
+}
+
+func CreateUser(ctx context.Context, req model.CreateUserRequest) (*model.User, error) {
+	hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, fmt.Errorf("hash password: %w", err)
+	}
+
+	u := &model.User{}
+	err = database.Pool.QueryRow(ctx,
+		`INSERT INTO users (username, password, full_name, role, branch_id)
+		 VALUES ($1,$2,$3,$4,$5)
+		 RETURNING id, username, '', full_name, role, branch_id, created_at, updated_at`,
+		req.Username, string(hashed), req.FullName, req.Role, req.BranchID,
+	).Scan(&u.ID, &u.Username, &u.Password, &u.FullName, &u.Role, &u.BranchID, &u.CreatedAt, &u.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return u, nil
+}
+
+func UpdateUser(ctx context.Context, id uuid.UUID, req model.UpdateUserRequest) (*model.User, error) {
+	// Build dynamic SET
+	setClauses := []string{}
+	args := []interface{}{}
+	argIdx := 1
+
+	if req.Username != "" {
+		setClauses = append(setClauses, fmt.Sprintf("username = $%d", argIdx))
+		args = append(args, req.Username)
+		argIdx++
+	}
+	if req.Password != "" {
+		hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			return nil, fmt.Errorf("hash password: %w", err)
+		}
+		setClauses = append(setClauses, fmt.Sprintf("password = $%d", argIdx))
+		args = append(args, string(hashed))
+		argIdx++
+	}
+	if req.FullName != "" {
+		setClauses = append(setClauses, fmt.Sprintf("full_name = $%d", argIdx))
+		args = append(args, req.FullName)
+		argIdx++
+	}
+	if req.Role != "" {
+		setClauses = append(setClauses, fmt.Sprintf("role = $%d", argIdx))
+		args = append(args, req.Role)
+		argIdx++
+	}
+	if req.BranchID != nil {
+		setClauses = append(setClauses, fmt.Sprintf("branch_id = $%d", argIdx))
+		args = append(args, *req.BranchID)
+		argIdx++
+	}
+	if req.IsActive != nil {
+		setClauses = append(setClauses, fmt.Sprintf("is_active = $%d", argIdx))
+		args = append(args, *req.IsActive)
+		argIdx++
+	}
+
+	if len(setClauses) == 0 {
+		return nil, errors.New("no fields to update")
+	}
+
+	setClauses = append(setClauses, "updated_at = NOW()")
+	args = append(args, id)
+
+	query := fmt.Sprintf(`
+		UPDATE users SET %s
+		WHERE id = $%d AND deleted_at IS NULL
+		RETURNING id, username, '', full_name, role, branch_id, created_at, updated_at`,
+		joinSetClauses(setClauses), argIdx)
+
+	u := &model.User{}
+	err := database.Pool.QueryRow(ctx, query, args...).Scan(
+		&u.ID, &u.Username, &u.Password, &u.FullName, &u.Role, &u.BranchID, &u.CreatedAt, &u.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return u, nil
+}
+
+func SoftDeleteUser(ctx context.Context, id uuid.UUID) error {
+	tag, err := database.Pool.Exec(ctx,
+		`UPDATE users SET deleted_at = $1, is_active = false, updated_at = NOW()
+		 WHERE id = $2 AND deleted_at IS NULL`,
+		time.Now(), id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return errors.New("user not found")
+	}
+	return nil
+}
+
+// joinSetClauses joins SET clause parts with commas
+func joinSetClauses(clauses []string) string {
+	result := ""
+	for i, c := range clauses {
+		if i > 0 {
+			result += ", "
+		}
+		result += c
+	}
+	return result
+}

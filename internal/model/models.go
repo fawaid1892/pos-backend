@@ -12,7 +12,7 @@ type User struct {
 	Username  string    `json:"username"`
 	Password  string    `json:"-"`
 	FullName  string    `json:"full_name"`
-	Role      string    `json:"role"` // admin, kasir, owner
+	Role      string    `json:"role"` // owner, admin_cabang, kasir
 	BranchID  *uuid.UUID `json:"branch_id,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -298,4 +298,30 @@ type APIResponse struct {
 	Error   string                  `json:"error,omitempty"`
 	Data    interface{}             `json:"data,omitempty"`
 	Meta    map[string]interface{} `json:"meta,omitempty"`
+}
+
+// ─── User Management ───
+
+type CreateUserRequest struct {
+	Username string    `json:"username"`
+	Password string    `json:"password"`
+	FullName string    `json:"full_name"`
+	Role     string    `json:"role"`
+	BranchID *uuid.UUID `json:"branch_id,omitempty"`
+}
+
+type UpdateUserRequest struct {
+	Username  string     `json:"username,omitempty"`
+	Password  string     `json:"password,omitempty"`
+	FullName  string     `json:"full_name,omitempty"`
+	Role      string     `json:"role,omitempty"`
+	BranchID  *uuid.UUID `json:"branch_id,omitempty"`
+	IsActive  *bool      `json:"is_active,omitempty"`
+}
+
+type ListUsersResponse struct {
+	Users []User `json:"users"`
+	Total int    `json:"total"`
+	Page  int    `json:"page"`
+	Limit int    `json:"limit"`
 }

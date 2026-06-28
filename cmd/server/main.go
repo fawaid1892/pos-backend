@@ -38,6 +38,7 @@ func main() {
 	stockH := handler.NewStockHandler()
 	reportH := handler.NewReportHandler()
 	exportH := handler.NewExportHandler()
+	userH := handler.NewUserHandler()
 	syncH := handler.NewSyncHandler(sqliteDB.DB)
 
 	// WebSocket hub for realtime notifications
@@ -94,6 +95,13 @@ func main() {
 
 	// Export
 	protected.HandleFunc("GET /api/v1/branches/{id}/reports/sales/export", exportH.SalesExport)
+
+	// Users
+	protected.HandleFunc("GET /api/v1/users", userH.List)
+	protected.HandleFunc("GET /api/v1/users/{id}", userH.GetByID)
+	protected.HandleFunc("POST /api/v1/users", userH.Create)
+	protected.HandleFunc("PUT /api/v1/users/{id}", userH.Update)
+	protected.HandleFunc("DELETE /api/v1/users/{id}", userH.Delete)
 
 	// Sync endpoints (authenticated — branches push/pull using their own credentials)
 	protected.HandleFunc("POST /api/v1/sync/push", syncH.Push)
