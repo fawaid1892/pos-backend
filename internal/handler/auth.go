@@ -18,6 +18,18 @@ func NewAuthHandler(cfg *config.Config) *AuthHandler {
 	return &AuthHandler{cfg: cfg}
 }
 
+// Login godoc
+// @Summary      User login
+// @Description  Authenticate a user with username and password, returns JWT token
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Param request body model.LoginRequest true "Login credentials"
+// @Success      200  {object}  model.LoginResponse
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      500  {object}  map[string]string
+// @Router       /auth/login [post]
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req model.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -51,6 +63,15 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Me godoc
+// @Summary      Get current user
+// @Description  Return the authenticated user's profile
+// @Tags         Auth
+// @Produce      json
+// @Success      200  {object}  model.MeResponse
+// @Failure      401  {object}  map[string]string
+// @Security     BearerAuth
+// @Router       /auth/me [get]
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	user, err := repository.FindUserByID(r.Context(), userID)
@@ -61,6 +82,14 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, model.MeResponse{User: *user})
 }
 
+// Logout godoc
+// @Summary      Logout
+// @Description  Invalidate current session (stateless JWT — client must discard token)
+// @Tags         Auth
+// @Produce      json
+// @Success      200  {object}  map[string]string
+// @Security     BearerAuth
+// @Router       /auth/logout [post]
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	// Stateless JWT — client must discard token.
 	writeJSON(w, http.StatusOK, map[string]string{"message": "logged out"})

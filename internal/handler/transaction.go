@@ -22,6 +22,18 @@ func NewTransactionHandler() *TransactionHandler {
 	return &TransactionHandler{}
 }
 
+// Checkout godoc
+// @Summary      Create a transaction (checkout)
+// @Description  Process a sale with validation and stock deduction
+// @Tags         Transactions
+// @Accept       json
+// @Produce      json
+// @Param request body model.CheckoutRequest true "Checkout data"
+// @Success      201  {object}  model.Transaction
+// @Failure      400  {object}  map[string]string
+// @Failure      500  {object}  map[string]string
+// @Security     BearerAuth
+// @Router       /transactions/checkout [post]
 func (h *TransactionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 	var req model.CheckoutRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -186,6 +198,17 @@ func (h *TransactionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 	go checkAndBroadcastLowStock(r.Context(), req.BranchID)
 }
 
+// List godoc
+// @Summary      List transactions
+// @Description  Get paginated list of transactions, optionally filtered by branch
+// @Tags         Transactions
+// @Produce      json
+// @Param branch_id query string false "Filter by branch UUID"
+// @Param limit query int false "Items per page (max 100)"
+// @Param offset query int false "Number of items to skip"
+// @Success      200  {array}   model.Transaction
+// @Security     BearerAuth
+// @Router       /transactions [get]
 func (h *TransactionHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	limit, _ := strconv.Atoi(q.Get("limit"))
@@ -209,6 +232,17 @@ func (h *TransactionHandler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, txs)
 }
 
+// GetByID godoc
+// @Summary      Get transaction by ID
+// @Description  Get a single transaction with its line items
+// @Tags         Transactions
+// @Produce      json
+// @Param id path string true "Transaction UUID"
+// @Success      200  {object}  model.Transaction
+// @Failure      400  {object}  map[string]string
+// @Failure      404  {object}  map[string]string
+// @Security     BearerAuth
+// @Router       /transactions/{id} [get]
 func (h *TransactionHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {

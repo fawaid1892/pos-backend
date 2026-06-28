@@ -9,8 +9,29 @@ import (
 	"pos-multi-branch/backend/internal/handler"
 	"pos-multi-branch/backend/internal/middleware"
 	"pos-multi-branch/backend/internal/ws"
+
+	httpSwagger "github.com/swaggo/http-swagger/v2"
+	_ "pos-multi-branch/backend/docs"
 )
 
+// @title           POS Multi-Branch API
+// @version         1.0
+// @description     Point of Sale multi-branch backend API with inventory management, reporting, and sync capabilities.
+// @termsOfService  http://swagger.io/terms/
+
+// @contact.name   API Support
+// @contact.email  support@sukrawetan.ai
+
+// @license.name  MIT
+// @license.url   https://opensource.org/licenses/MIT
+
+// @host      localhost:8080
+// @BasePath  /api/v1
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Enter the token with the `Bearer ` prefix, e.g. "Bearer abcde12345".
 func main() {
 	cfg := config.Load()
 
@@ -47,6 +68,11 @@ func main() {
 	ws.SetDefaultHub(wsHub)
 
 	mux := http.NewServeMux()
+
+	// ─── Swagger UI ───
+	mux.Handle("GET /swagger/", httpSwagger.Handler(
+		httpSwagger.URL("http://localhost:8080/swagger/doc.json"),
+	))
 
 	// ─── Public routes ───
 	mux.Handle("GET /api/v1/ws", wsHub)

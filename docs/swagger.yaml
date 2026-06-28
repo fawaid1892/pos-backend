@@ -1,0 +1,811 @@
+basePath: /api/v1
+definitions:
+  model.Branch:
+    properties:
+      address:
+        type: string
+      created_at:
+        type: string
+      deleted_at:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      name:
+        type: string
+      phone:
+        type: string
+      tax_rate:
+        type: number
+      updated_at:
+        type: string
+    type: object
+  model.Category:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  model.CheckoutItemReq:
+    properties:
+      product_id:
+        type: string
+      quantity:
+        type: integer
+    type: object
+  model.CheckoutRequest:
+    properties:
+      branch_id:
+        type: string
+      cash_amount:
+        type: number
+      customer_name:
+        type: string
+      discount_percent:
+        type: number
+      items:
+        items:
+          $ref: '#/definitions/model.CheckoutItemReq'
+        type: array
+      payment_method:
+        type: string
+      payment_reference:
+        type: string
+    type: object
+  model.CreateBranchRequest:
+    properties:
+      address:
+        type: string
+      name:
+        type: string
+      phone:
+        type: string
+    type: object
+  model.CreateProductRequest:
+    properties:
+      barcode:
+        type: string
+      category_id:
+        type: string
+      cost_price:
+        type: number
+      name:
+        type: string
+      price:
+        type: number
+      stock:
+        type: integer
+    type: object
+  model.LoginRequest:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    type: object
+  model.LoginResponse:
+    properties:
+      token:
+        type: string
+      user:
+        $ref: '#/definitions/model.User'
+    type: object
+  model.MeResponse:
+    properties:
+      user:
+        $ref: '#/definitions/model.User'
+    type: object
+  model.Product:
+    properties:
+      barcode:
+        type: string
+      category_id:
+        type: string
+      category_name:
+        type: string
+      cost_price:
+        type: number
+      created_at:
+        type: string
+      deleted_at:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      price:
+        type: number
+      stock:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  model.Transaction:
+    properties:
+      branch_id:
+        type: string
+      cash_amount:
+        type: number
+      change_amount:
+        type: number
+      created_at:
+        type: string
+      customer_name:
+        type: string
+      discount_amount:
+        type: number
+      discount_percent:
+        type: number
+      id:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/model.TransactionItem'
+        type: array
+      payment_method:
+        type: string
+      payment_reference:
+        type: string
+      subtotal:
+        type: number
+      tax_amount:
+        type: number
+      tax_rate:
+        type: number
+      total:
+        type: number
+      user_id:
+        type: string
+    type: object
+  model.TransactionItem:
+    properties:
+      id:
+        type: string
+      price:
+        type: number
+      product_id:
+        type: string
+      product_name:
+        type: string
+      quantity:
+        type: integer
+      subtotal:
+        type: number
+      transaction_id:
+        type: string
+    type: object
+  model.UpdateBranchRequest:
+    properties:
+      address:
+        type: string
+      name:
+        type: string
+      phone:
+        type: string
+    type: object
+  model.UpdateProductRequest:
+    properties:
+      barcode:
+        type: string
+      category_id:
+        type: string
+      cost_price:
+        type: number
+      name:
+        type: string
+      price:
+        type: number
+      stock:
+        type: integer
+    type: object
+  model.User:
+    properties:
+      branch_id:
+        type: string
+      created_at:
+        type: string
+      full_name:
+        type: string
+      id:
+        type: string
+      role:
+        description: owner, admin_cabang, kasir
+        type: string
+      updated_at:
+        type: string
+      username:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@sukrawetan.ai
+    name: API Support
+  description: Point of Sale multi-branch backend API with inventory management, reporting,
+    and sync capabilities.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: POS Multi-Branch API
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate a user with username and password, returns JWT token
+      parameters:
+      - description: Login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.LoginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: User login
+      tags:
+      - Auth
+  /auth/logout:
+    post:
+      description: Invalidate current session (stateless JWT — client must discard
+        token)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Logout
+      tags:
+      - Auth
+  /auth/me:
+    get:
+      description: Return the authenticated user's profile
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.MeResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get current user
+      tags:
+      - Auth
+  /branches:
+    get:
+      description: Get all active branches
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Branch'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List branches
+      tags:
+      - Branches
+    post:
+      consumes:
+      - application/json
+      description: Create a new branch
+      parameters:
+      - description: Branch data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.CreateBranchRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Branch'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create a branch
+      tags:
+      - Branches
+  /branches/{id}:
+    delete:
+      description: Soft-delete (deactivate) a branch by UUID
+      parameters:
+      - description: Branch UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Soft-delete a branch
+      tags:
+      - Branches
+    get:
+      description: Get a single branch by its UUID
+      parameters:
+      - description: Branch UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Branch'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get branch by ID
+      tags:
+      - Branches
+    put:
+      consumes:
+      - application/json
+      description: Update branch details by UUID
+      parameters:
+      - description: Branch UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated branch data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.UpdateBranchRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Branch'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update a branch
+      tags:
+      - Branches
+  /categories:
+    get:
+      description: Get all product categories
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Category'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List categories
+      tags:
+      - Categories
+    post:
+      consumes:
+      - application/json
+      description: Create a new product category
+      parameters:
+      - description: Category name
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            name:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Category'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create a category
+      tags:
+      - Categories
+  /products:
+    get:
+      description: Get paginated list of products with search and filter options
+      parameters:
+      - description: Search by name
+        in: query
+        name: q
+        type: string
+      - description: Filter by barcode
+        in: query
+        name: barcode
+        type: string
+      - description: Filter by category UUID
+        in: query
+        name: category_id
+        type: string
+      - description: Sort field (name, price, stock, created_at)
+        in: query
+        name: sort_by
+        type: string
+      - description: Sort direction (asc, desc)
+        in: query
+        name: sort_order
+        type: string
+      - description: Minimum stock threshold
+        in: query
+        name: min_stock
+        type: integer
+      - description: Items per page (max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Number of items to skip
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Product'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List products
+      tags:
+      - Products
+    post:
+      consumes:
+      - application/json
+      description: Create a new product
+      parameters:
+      - description: Product data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.CreateProductRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Product'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create a product
+      tags:
+      - Products
+  /products/{id}:
+    delete:
+      description: Soft-delete a product by UUID
+      parameters:
+      - description: Product UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Soft-delete a product
+      tags:
+      - Products
+    get:
+      description: Get a single product by its UUID
+      parameters:
+      - description: Product UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Product'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get product by ID
+      tags:
+      - Products
+    put:
+      consumes:
+      - application/json
+      description: Update product details by UUID
+      parameters:
+      - description: Product UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated product data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.UpdateProductRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Product'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update a product
+      tags:
+      - Products
+  /transactions:
+    get:
+      description: Get paginated list of transactions, optionally filtered by branch
+      parameters:
+      - description: Filter by branch UUID
+        in: query
+        name: branch_id
+        type: string
+      - description: Items per page (max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Number of items to skip
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Transaction'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List transactions
+      tags:
+      - Transactions
+  /transactions/{id}:
+    get:
+      description: Get a single transaction with its line items
+      parameters:
+      - description: Transaction UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Transaction'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get transaction by ID
+      tags:
+      - Transactions
+  /transactions/checkout:
+    post:
+      consumes:
+      - application/json
+      description: Process a sale with validation and stock deduction
+      parameters:
+      - description: Checkout data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.CheckoutRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Transaction'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create a transaction (checkout)
+      tags:
+      - Transactions
+securityDefinitions:
+  BearerAuth:
+    description: Enter the token with the `Bearer ` prefix, e.g. "Bearer abcde12345".
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
