@@ -118,6 +118,18 @@ func UpdateBranch(ctx context.Context, id uuid.UUID, req model.UpdateBranchReque
 }
 
 func SoftDeleteBranch(ctx context.Context, id uuid.UUID) error {
+	// Bug E: Check if any users still reference this branch
+	var exists bool
+	err := database.Pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM users WHERE branch_id = $1 LIMIT 1)`, id,
+	).Scan(&exists)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return errors.New("cannot delete branch: there are users still assigned to this branch")
+	}
+
 	tag, err := database.Pool.Exec(ctx,
 		`UPDATE branches SET deleted_at=$1, is_active=false WHERE id=$2 AND deleted_at IS NULL`,
 		time.Now(), id)
@@ -335,6 +347,18 @@ func UpdateProduct(ctx context.Context, id uuid.UUID, req model.UpdateProductReq
 }
 
 func SoftDeleteProduct(ctx context.Context, id uuid.UUID) error {
+	// Bug E: Check if any transactions still reference this product
+	var exists bool
+	err := database.Pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM transaction_items WHERE product_id = $1 LIMIT 1)`, id,
+	).Scan(&exists)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return errors.New("cannot delete product: it has transaction history")
+	}
+
 	tag, err := database.Pool.Exec(ctx,
 		`UPDATE products SET deleted_at=$1 WHERE id=$2 AND deleted_at IS NULL`,
 		time.Now(), id)

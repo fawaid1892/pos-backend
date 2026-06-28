@@ -52,8 +52,6 @@ func (h *ProductHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, products)
 }
-	writeJSON(w, http.StatusOK, products)
-}
 
 func (h *ProductHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("id"))

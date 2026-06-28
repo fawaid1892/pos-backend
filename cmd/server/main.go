@@ -55,54 +55,59 @@ func main() {
 	// ─── Protected routes ───
 	protected := http.NewServeMux()
 
+	// RBAC wrappers for role-based access control
+	adminOnly := middleware.RequireRole("admin_cabang")
+	adminOrOwner := middleware.RequireRole("admin_cabang", "owner")
+	kasirOrAdmin := middleware.RequireRole("kasir", "admin_cabang")
+
 	// Auth
 	protected.HandleFunc("GET /api/v1/auth/me", authH.Me)
 	protected.HandleFunc("POST /api/v1/auth/logout", authH.Logout)
 
-	// Branches
-	protected.HandleFunc("GET /api/v1/branches", branchH.List)
-	protected.HandleFunc("GET /api/v1/branches/{id}", branchH.GetByID)
-	protected.HandleFunc("POST /api/v1/branches", branchH.Create)
-	protected.HandleFunc("PUT /api/v1/branches/{id}", branchH.Update)
-	protected.HandleFunc("DELETE /api/v1/branches/{id}", branchH.Delete)
+	// Branches CRUD → admin only
+	protected.Handle("GET /api/v1/branches", adminOnly(http.HandlerFunc(branchH.List)))
+	protected.Handle("GET /api/v1/branches/{id}", adminOnly(http.HandlerFunc(branchH.GetByID)))
+	protected.Handle("POST /api/v1/branches", adminOnly(http.HandlerFunc(branchH.Create)))
+	protected.Handle("PUT /api/v1/branches/{id}", adminOnly(http.HandlerFunc(branchH.Update)))
+	protected.Handle("DELETE /api/v1/branches/{id}", adminOnly(http.HandlerFunc(branchH.Delete)))
 
-	// Products
-	protected.HandleFunc("GET /api/v1/products", productH.List)
-	protected.HandleFunc("GET /api/v1/products/{id}", productH.GetByID)
-	protected.HandleFunc("POST /api/v1/products", productH.Create)
-	protected.HandleFunc("PUT /api/v1/products/{id}", productH.Update)
-	protected.HandleFunc("DELETE /api/v1/products/{id}", productH.Delete)
+	// Products CRUD → admin only
+	protected.Handle("GET /api/v1/products", adminOnly(http.HandlerFunc(productH.List)))
+	protected.Handle("GET /api/v1/products/{id}", adminOnly(http.HandlerFunc(productH.GetByID)))
+	protected.Handle("POST /api/v1/products", adminOnly(http.HandlerFunc(productH.Create)))
+	protected.Handle("PUT /api/v1/products/{id}", adminOnly(http.HandlerFunc(productH.Update)))
+	protected.Handle("DELETE /api/v1/products/{id}", adminOnly(http.HandlerFunc(productH.Delete)))
 
-	// Categories
-	protected.HandleFunc("GET /api/v1/categories", productH.ListCategories)
-	protected.HandleFunc("POST /api/v1/categories", productH.CreateCategory)
+	// Categories → admin only
+	protected.Handle("GET /api/v1/categories", adminOnly(http.HandlerFunc(productH.ListCategories)))
+	protected.Handle("POST /api/v1/categories", adminOnly(http.HandlerFunc(productH.CreateCategory)))
 
-	// Transactions
-	protected.HandleFunc("GET /api/v1/transactions", txH.List)
-	protected.HandleFunc("GET /api/v1/transactions/{id}", txH.GetByID)
-	protected.HandleFunc("POST /api/v1/transactions/checkout", txH.Checkout)
+	// Transactions → kasir + admin
+	protected.Handle("GET /api/v1/transactions", kasirOrAdmin(http.HandlerFunc(txH.List)))
+	protected.Handle("GET /api/v1/transactions/{id}", kasirOrAdmin(http.HandlerFunc(txH.GetByID)))
+	protected.Handle("POST /api/v1/transactions/checkout", kasirOrAdmin(http.HandlerFunc(txH.Checkout)))
 
-	// Stock / Inventory
-	protected.HandleFunc("POST /api/v1/branches/{id}/inventory/adjustment", stockH.Adjustment)
-	protected.HandleFunc("POST /api/v1/inventory/transfer", stockH.Transfer)
-	protected.HandleFunc("GET /api/v1/branches/{id}/inventory", stockH.ListInventory)
-	protected.HandleFunc("GET /api/v1/branches/{id}/inventory/low-stock", stockH.LowStock)
+	// Stock / Inventory → admin only (manage stock)
+	protected.Handle("POST /api/v1/branches/{id}/inventory/adjustment", adminOnly(http.HandlerFunc(stockH.Adjustment)))
+	protected.Handle("POST /api/v1/inventory/transfer", adminOnly(http.HandlerFunc(stockH.Transfer)))
+	protected.Handle("GET /api/v1/branches/{id}/inventory", adminOnly(http.HandlerFunc(stockH.ListInventory)))
+	protected.Handle("GET /api/v1/branches/{id}/inventory/low-stock", adminOnly(http.HandlerFunc(stockH.LowStock)))
 
-	// Reports
-	protected.HandleFunc("GET /api/v1/branches/{id}/reports/sales", reportH.Sales)
-	protected.HandleFunc("GET /api/v1/branches/{id}/reports/sales.pdf", reportH.SalesPDF)
-	protected.HandleFunc("GET /api/v1/branches/{id}/reports/stock", reportH.Stock)
-	protected.HandleFunc("GET /api/v1/branches/{id}/reports/profit-loss", reportH.ProfitLoss)
+	// Reports → admin + owner
+	protected.Handle("GET /api/v1/branches/{id}/reports/sales", adminOrOwner(http.HandlerFunc(reportH.Sales)))
+	protected.Handle("GET /api/v1/branches/{id}/reports/sales.pdf", adminOrOwner(http.HandlerFunc(reportH.SalesPDF)))
+	protected.Handle("GET /api/v1/branches/{id}/reports/stock", adminOrOwner(http.HandlerFunc(reportH.Stock)))
+	protected.Handle("GET /api/v1/branches/{id}/reports/profit-loss", adminOrOwner(http.HandlerFunc(reportH.ProfitLoss)))
 
-	// Export
-	protected.HandleFunc("GET /api/v1/branches/{id}/reports/sales/export", exportH.SalesExport)
+	// Export → admin + owner
+	protected.Handle("GET /api/v1/branches/{id}/reports/sales/export", adminOrOwner(http.HandlerFunc(exportH.SalesExport)))
 
-	// Users
-	protected.HandleFunc("GET /api/v1/users", userH.List)
-	protected.HandleFunc("GET /api/v1/users/{id}", userH.GetByID)
-	protected.HandleFunc("POST /api/v1/users", userH.Create)
-	protected.HandleFunc("PUT /api/v1/users/{id}", userH.Update)
-	protected.HandleFunc("DELETE /api/v1/users/{id}", userH.Delete)
+	// Users management → admin only
+	protected.Handle("GET /api/v1/users", adminOnly(http.HandlerFunc(userH.List)))
+	protected.Handle("GET /api/v1/users/{id}", adminOnly(http.HandlerFunc(userH.GetByID)))
+	protected.Handle("POST /api/v1/users", adminOnly(http.HandlerFunc(userH.Create)))
+	protected.Handle("PUT /api/v1/users/{id}", adminOnly(http.HandlerFunc(userH.Update)))
+	protected.Handle("DELETE /api/v1/users/{id}", adminOnly(http.HandlerFunc(userH.Delete)))
 
 	// Sync endpoints (authenticated — branches push/pull using their own credentials)
 	protected.HandleFunc("POST /api/v1/sync/push", syncH.Push)

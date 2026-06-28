@@ -111,3 +111,24 @@ func GetBranchID(ctx context.Context) *uuid.UUID {
 	}
 	return &v
 }
+
+// RequireRole returns a middleware that checks if the authenticated user has one
+// of the allowed roles. Must be used after AuthMiddleware.
+func RequireRole(allowedRoles ...string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			role := GetUserRole(r.Context())
+			if role == "" {
+				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+				return
+			}
+			for _, allowed := range allowedRoles {
+				if role == allowed {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+			http.Error(w, `{"error":"forbidden: insufficient permissions"}`, http.StatusForbidden)
+		})
+	}
+}
