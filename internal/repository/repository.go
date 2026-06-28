@@ -166,10 +166,42 @@ func CreateCategory(ctx context.Context, name string) (*model.Category, error) {
 // ─── Product ───
 
 type ListProductsParams struct {
-	Query   string
-	Barcode string
-	Limit   int
-	Offset  int
+	Query      string
+	Barcode    string
+	CategoryID string
+	SortBy     string
+	SortOrder  string
+	MinStock   *int
+	Limit      int
+	Offset     int
+}
+
+func CheckBarcodeExists(ctx context.Context, barcode string) (bool, error) {
+	var id uuid.UUID
+	err := database.Pool.QueryRow(ctx,
+		`SELECT id FROM products WHERE barcode = $1 AND deleted_at IS NULL`, barcode,
+	).Scan(&id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+func CheckCategoryExists(ctx context.Context, id uuid.UUID) (bool, error) {
+	var catID uuid.UUID
+	err := database.Pool.QueryRow(ctx,
+		`SELECT id FROM categories WHERE id = $1`, id,
+	).Scan(&catID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 func ListProducts(ctx context.Context, p ListProductsParams) ([]model.Product, error) {
@@ -188,8 +220,38 @@ func ListProducts(ctx context.Context, p ListProductsParams) ([]model.Product, e
 		argIdx++
 	}
 
+	if p.CategoryID != "" {
+		where += fmt.Sprintf(" AND p.category_id = $%d", argIdx)
+		args = append(args, p.CategoryID)
+		argIdx++
+	}
+
+	if p.MinStock != nil {
+		where += fmt.Sprintf(" AND p.stock >= $%d", argIdx)
+		args = append(args, *p.MinStock)
+		argIdx++
+	}
+
 	if p.Limit <= 0 || p.Limit > 100 {
 		p.Limit = 20
+	}
+
+	// Safe sort whitelist to prevent SQL injection
+	sortWhitelist := map[string]bool{
+		"name":       true,
+		"price":      true,
+		"stock":      true,
+		"created_at": true,
+	}
+
+	orderBy := "p.name"
+	if sortWhitelist[p.SortBy] {
+		orderBy = "p." + p.SortBy
+	}
+
+	orderDir := "ASC"
+	if p.SortOrder == "desc" {
+		orderDir = "DESC"
 	}
 
 	query := fmt.Sprintf(`
@@ -199,8 +261,8 @@ func ListProducts(ctx context.Context, p ListProductsParams) ([]model.Product, e
 		FROM products p
 		LEFT JOIN categories c ON c.id = p.category_id
 		WHERE %s
-		ORDER BY p.name
-		LIMIT $%d OFFSET $%d`, where, argIdx, argIdx+1)
+		ORDER BY %s %s
+		LIMIT $%d OFFSET $%d`, where, orderBy, orderDir, argIdx, argIdx+1)
 
 	args = append(args, p.Limit, p.Offset)
 

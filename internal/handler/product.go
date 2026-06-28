@@ -21,12 +21,27 @@ func (h *ProductHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	offset, _ := strconv.Atoi(q.Get("offset"))
+	page, _ := strconv.Atoi(q.Get("page"))
+	if page > 0 && offset == 0 {
+		offset = (page - 1) * limit
+	}
+
+	var minStock *int
+	if ms := q.Get("min_stock"); ms != "" {
+		if v, err := strconv.Atoi(ms); err == nil {
+			minStock = &v
+		}
+	}
 
 	products, err := repository.ListProducts(r.Context(), repository.ListProductsParams{
-		Query:   q.Get("q"),
-		Barcode: q.Get("barcode"),
-		Limit:   limit,
-		Offset:  offset,
+		Query:      q.Get("q"),
+		Barcode:    q.Get("barcode"),
+		CategoryID: q.Get("category_id"),
+		SortBy:     q.Get("sort_by"),
+		SortOrder:  q.Get("sort_order"),
+		MinStock:   minStock,
+		Limit:      limit,
+		Offset:     offset,
 	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -35,6 +50,8 @@ func (h *ProductHandler) List(w http.ResponseWriter, r *http.Request) {
 	if products == nil {
 		products = []model.Product{}
 	}
+	writeJSON(w, http.StatusOK, products)
+}
 	writeJSON(w, http.StatusOK, products)
 }
 
@@ -66,6 +83,29 @@ func (h *ProductHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name and barcode are required"})
 		return
 	}
+
+	// Bug B: Validate category_id exists
+	catExists, err := repository.CheckCategoryExists(r.Context(), req.CategoryID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if !catExists {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "category not found"})
+		return
+	}
+
+	// Bug A: Check barcode duplicate
+	barcodeExists, err := repository.CheckBarcodeExists(r.Context(), req.Barcode)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if barcodeExists {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "barcode already exists"})
+		return
+	}
+
 	product, err := repository.CreateProduct(r.Context(), req)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
