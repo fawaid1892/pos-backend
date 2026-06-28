@@ -14,18 +14,13 @@ import (
 func main() {
 	cfg := config.Load()
 
-	// ─── Supabase / PostgreSQL ───
+	// ─── PostgreSQL (ElectricSQL-managed via logical replication) ───
 	if err := database.Connect(cfg.DatabaseURL); err != nil {
 		log.Fatalf("Database connection failed: %v", err)
 	}
 	defer database.Close()
 
-	// ─── SQLite sync mirror (local server) ───
-	sqliteDB, err := database.NewSQLiteDB(cfg.SQLitePath)
-	if err != nil {
-		log.Fatalf("SQLite sync mirror failed: %v", err)
-	}
-	defer sqliteDB.Close()
+	log.Printf("ElectricSQL URL: %s", cfg.ElectricURL)
 
 	// JWT
 	middleware.InitJWT(cfg)
@@ -39,7 +34,6 @@ func main() {
 	reportH := handler.NewReportHandler()
 	exportH := handler.NewExportHandler()
 	userH := handler.NewUserHandler()
-	syncH := handler.NewSyncHandler(sqliteDB.DB)
 	dashboardH := handler.NewDashboardHandler()
 
 	// WebSocket hub for realtime notifications
@@ -108,11 +102,6 @@ func main() {
 	protected.Handle("POST /api/v1/users", adminOnly(http.HandlerFunc(userH.Create)))
 	protected.Handle("PUT /api/v1/users/{id}", adminOnly(http.HandlerFunc(userH.Update)))
 	protected.Handle("DELETE /api/v1/users/{id}", adminOnly(http.HandlerFunc(userH.Delete)))
-
-	// Sync endpoints (authenticated — branches push/pull using their own credentials)
-	protected.HandleFunc("POST /api/v1/sync/push", syncH.Push)
-	protected.HandleFunc("GET /api/v1/sync/pull", syncH.Pull)
-	protected.HandleFunc("POST /api/v1/sync/resolve", syncH.Resolve)
 
 	// Dashboard
 	protected.HandleFunc("GET /api/v1/dashboard/stats", dashboardH.DashboardStats)
