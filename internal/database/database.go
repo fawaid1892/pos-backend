@@ -16,7 +16,10 @@ var DB *gorm.DB
 
 func Connect(databaseURL string) error {
 	var err error
-	DB, err = gorm.Open(postgres.Open(databaseURL), &gorm.Config{
+	DB, err = gorm.Open(postgres.New(postgres.Config{
+		DSN:                  databaseURL,
+		PreferSimpleProtocol: true, // Disable prepared statements for PgBouncer
+	}), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Warn),
 	})
 	if err != nil {
