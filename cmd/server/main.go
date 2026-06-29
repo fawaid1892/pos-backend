@@ -20,8 +20,6 @@ func main() {
 	}
 	defer database.Close()
 
-	log.Printf("ElectricSQL URL: %s", cfg.ElectricURL)
-
 	// ElectricSQL — shapes managed via dashboard not API
 	log.Printf("ElectricSQL URL: %s (shapes managed via dashboard)", cfg.ElectricURL)
 
