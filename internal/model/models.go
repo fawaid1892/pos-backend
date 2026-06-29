@@ -61,6 +61,8 @@ type Branch struct {
 	Name      string         `json:"name" gorm:"not null;size:200"`
 	Address   string         `json:"address" gorm:"size:500;default:''"`
 	Phone     string         `json:"phone" gorm:"size:30;default:''"`
+	Province  string         `json:"province" gorm:"size:100;not null;default:''"`
+	City      string         `json:"city" gorm:"size:100;not null;default:''"`
 	TaxRate   float64        `json:"tax_rate" gorm:"default:0"`
 	IsActive  bool           `json:"is_active" gorm:"default:false"`
 	CreatedAt time.Time      `json:"created_at" gorm:"autoCreateTime"`
@@ -69,15 +71,19 @@ type Branch struct {
 }
 
 type CreateBranchRequest struct {
-	Name    string `json:"name"`
-	Address string `json:"address"`
-	Phone   string `json:"phone"`
+	Name     string `json:"name"`
+	Address  string `json:"address"`
+	Phone    string `json:"phone"`
+	Province string `json:"province"`
+	City     string `json:"city"`
 }
 
 type UpdateBranchRequest struct {
-	Name    string `json:"name"`
-	Address string `json:"address"`
-	Phone   string `json:"phone"`
+	Name     string `json:"name"`
+	Address  string `json:"address"`
+	Phone    string `json:"phone"`
+	Province string `json:"province"`
+	City     string `json:"city"`
 }
 
 // ─── Category ───

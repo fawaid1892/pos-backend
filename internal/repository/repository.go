@@ -67,9 +67,11 @@ func GetBranchByID(id uuid.UUID) (*model.Branch, error) {
 
 func CreateBranch(req model.CreateBranchRequest) (*model.Branch, error) {
 	b := &model.Branch{
-		Name:    req.Name,
-		Address: req.Address,
-		Phone:   req.Phone,
+		Name:     req.Name,
+		Address:  req.Address,
+		Phone:    req.Phone,
+		Province: req.Province,
+		City:     req.City,
 	}
 	err := database.DB.Create(b).Error
 	if err != nil {
@@ -81,9 +83,11 @@ func CreateBranch(req model.CreateBranchRequest) (*model.Branch, error) {
 func UpdateBranch(id uuid.UUID, req model.UpdateBranchRequest) (*model.Branch, error) {
 	b := &model.Branch{}
 	err := database.DB.Model(b).Where("id = ? AND deleted_at IS NULL", id).Updates(map[string]interface{}{
-		"name":    req.Name,
-		"address": req.Address,
-		"phone":   req.Phone,
+		"name":     req.Name,
+		"address":  req.Address,
+		"phone":    req.Phone,
+		"province": req.Province,
+		"city":     req.City,
 	}).First(b).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -113,6 +117,18 @@ func SoftDeleteBranch(id uuid.UUID) error {
 		return errors.New("branch not found")
 	}
 	return nil
+}
+
+// ─── Branch User Assignment ───
+
+func ListUsersByBranch(branchID uuid.UUID) ([]model.User, error) {
+	var users []model.User
+	err := database.DB.Where("branch_id = ? AND deleted_at IS NULL", branchID).Find(&users).Error
+	return users, err
+}
+
+func AssignUserToBranch(userID uuid.UUID, branchID *uuid.UUID) error {
+	return database.DB.Model(&model.User{}).Where("id = ?", userID).UpdateColumn("branch_id", branchID).Error
 }
 
 // ─── Category ───

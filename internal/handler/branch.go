@@ -99,3 +99,60 @@ func (h *BranchHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "deleted"})
 }
+
+// ─── Branch User Assignment ───
+
+func (h *BranchHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid branch id"})
+		return
+	}
+	users, err := repository.ListUsersByBranch(id)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if users == nil {
+		users = []model.User{}
+	}
+	writeJSON(w, http.StatusOK, users)
+}
+
+type assignUserRequest struct {
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (h *BranchHandler) AssignUser(w http.ResponseWriter, r *http.Request) {
+	branchID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid branch id"})
+		return
+	}
+
+	var req assignUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	if err := repository.AssignUserToBranch(req.UserID, &branchID); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "user assigned to branch"})
+}
+
+func (h *BranchHandler) RemoveUser(w http.ResponseWriter, r *http.Request) {
+	userID, err := uuid.Parse(r.PathValue("userId"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid user id"})
+		return
+	}
+
+	if err := repository.AssignUserToBranch(userID, nil); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "user removed from branch"})
+}

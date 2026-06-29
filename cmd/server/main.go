@@ -77,6 +77,11 @@ func main() {
 	protected.Handle("PUT /api/v1/branches/{id}", requirePerm("branches.update")(http.HandlerFunc(branchH.Update)))
 	protected.Handle("DELETE /api/v1/branches/{id}", requirePerm("branches.delete")(http.HandlerFunc(branchH.Delete)))
 
+	// Branch user assignment
+	protected.Handle("GET /api/v1/branches/{id}/users", requirePerm("branches.read")(http.HandlerFunc(branchH.ListUsers)))
+	protected.Handle("POST /api/v1/branches/{id}/users", requirePerm("branches.update")(http.HandlerFunc(branchH.AssignUser)))
+	protected.Handle("DELETE /api/v1/branches/{id}/users/{userId}", requirePerm("branches.update")(http.HandlerFunc(branchH.RemoveUser)))
+
 	// Products → products.*
 	protected.Handle("GET /api/v1/products", requirePerm("products.read")(http.HandlerFunc(productH.List)))
 	protected.Handle("GET /api/v1/products/{id}", requirePerm("products.read")(http.HandlerFunc(productH.GetByID)))
