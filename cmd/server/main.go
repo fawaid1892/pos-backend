@@ -74,15 +74,15 @@ func main() {
 	protected.Handle("PUT /api/v1/branches/{id}", adminOnly(http.HandlerFunc(branchH.Update)))
 	protected.Handle("DELETE /api/v1/branches/{id}", adminOnly(http.HandlerFunc(branchH.Delete)))
 
-	// Products CRUD → admin only
-	protected.Handle("GET /api/v1/products", adminOnly(http.HandlerFunc(productH.List)))
-	protected.Handle("GET /api/v1/products/{id}", adminOnly(http.HandlerFunc(productH.GetByID)))
+	// Products → list & detail for kasir+admin, create/update/delete for admin only
+	protected.Handle("GET /api/v1/products", kasirOrAdmin(http.HandlerFunc(productH.List)))
+	protected.Handle("GET /api/v1/products/{id}", kasirOrAdmin(http.HandlerFunc(productH.GetByID)))
 	protected.Handle("POST /api/v1/products", adminOnly(http.HandlerFunc(productH.Create)))
 	protected.Handle("PUT /api/v1/products/{id}", adminOnly(http.HandlerFunc(productH.Update)))
 	protected.Handle("DELETE /api/v1/products/{id}", adminOnly(http.HandlerFunc(productH.Delete)))
 
-	// Categories → admin only
-	protected.Handle("GET /api/v1/categories", adminOnly(http.HandlerFunc(productH.ListCategories)))
+	// Categories → list for kasir+admin, create for admin only
+	protected.Handle("GET /api/v1/categories", kasirOrAdmin(http.HandlerFunc(productH.ListCategories)))
 	protected.Handle("POST /api/v1/categories", adminOnly(http.HandlerFunc(productH.CreateCategory)))
 
 	// Transactions → kasir + admin
@@ -112,9 +112,9 @@ func main() {
 	protected.Handle("PUT /api/v1/users/{id}", adminOnly(http.HandlerFunc(userH.Update)))
 	protected.Handle("DELETE /api/v1/users/{id}", adminOnly(http.HandlerFunc(userH.Delete)))
 
-	// Dashboard
-	protected.HandleFunc("GET /api/v1/dashboard/stats", dashboardH.DashboardStats)
-	protected.HandleFunc("GET /api/v1/dashboard/sales-chart", dashboardH.SalesChart)
+	// Dashboard → admin + owner only
+	protected.Handle("GET /api/v1/dashboard/stats", adminOrOwner(http.HandlerFunc(dashboardH.DashboardStats)))
+	protected.Handle("GET /api/v1/dashboard/sales-chart", adminOrOwner(http.HandlerFunc(dashboardH.SalesChart)))
 
 	// ElectricSQL shape status
 	protected.HandleFunc("GET /api/v1/electric/shapes", electricH.Shapes)
