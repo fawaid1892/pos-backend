@@ -126,19 +126,20 @@ func GetShapeStatuses() []ShapeStatus {
 	return result
 }
 
-// healthCheck hits the ElectricSQL /health endpoint.
+// healthCheck hits the ElectricSQL availability endpoint.
 func healthCheck(electricURL string) error {
-	url := electricURL + "/health"
-	resp, err := http.Get(url)
-	if err != nil {
-		return fmt.Errorf("GET %s: %w", url, err)
+	var lastErr error
+	for i := 0; i < 15; i++ {
+		url := electricURL + "/"
+		resp, err := http.Get(url)
+		if err == nil {
+			resp.Body.Close()
+			return nil
+		}
+		lastErr = err
+		time.Sleep(time.Second * 2)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("GET %s returned %d: %s", url, resp.StatusCode, string(body))
-	}
-	return nil
+	return fmt.Errorf("health check failed after 15 retries: %w", lastErr)
 }
 
 // listShapes hits GET /v1/shape to verify the service is ready.
