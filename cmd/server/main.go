@@ -44,6 +44,7 @@ func main() {
 	dashboardH := handler.NewDashboardHandler()
 	electricH := handler.NewElectricHandler()
 	roleH := handler.NewRoleHandler()
+	promoH := handler.NewPromotionHandler()
 
 	// Wire up the RoleHasPermission function (avoids circular import)
 	middleware.RoleHasPermission = repository.RoleHasPermission
@@ -136,6 +137,15 @@ func main() {
 
 	// ElectricSQL shape status
 	protected.HandleFunc("GET /api/v1/electric/shapes", electricH.Shapes)
+
+	// Promotions → promotions.*
+	protected.Handle("GET /api/v1/promotions", requirePerm("promotions.read")(http.HandlerFunc(promoH.List)))
+	protected.Handle("POST /api/v1/promotions", requirePerm("promotions.create")(http.HandlerFunc(promoH.Create)))
+	protected.Handle("GET /api/v1/promotions/{id}", requirePerm("promotions.read")(http.HandlerFunc(promoH.GetByID)))
+	protected.Handle("PUT /api/v1/promotions/{id}", requirePerm("promotions.update")(http.HandlerFunc(promoH.Update)))
+	protected.Handle("DELETE /api/v1/promotions/{id}", requirePerm("promotions.delete")(http.HandlerFunc(promoH.Delete)))
+	protected.Handle("GET /api/v1/promotions/active", requirePerm("promotions.read")(http.HandlerFunc(promoH.Active)))
+	protected.Handle("POST /api/v1/promotions/validate-voucher", requirePerm("transactions.create")(http.HandlerFunc(promoH.ValidateVoucher)))
 
 	// ─── Top-level dispatcher: public routes first, then auth-protected ───
 	mux.Handle("/api/v1/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

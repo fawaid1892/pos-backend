@@ -413,3 +413,72 @@ type ListUsersResponse struct {
 	Page  int    `json:"page"`
 	Limit int    `json:"limit"`
 }
+
+// ─── Promotion ───
+
+type Promotion struct {
+	ID            uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	Name          string         `json:"name" gorm:"not null;size:200"`
+	Type          string         `json:"type" gorm:"not null;size:20"`
+	Code          *string        `json:"code,omitempty" gorm:"uniqueIndex;size:50;default:null"`
+	DiscountValue float64        `json:"discount_value" gorm:"not null;default:0"`
+	DiscountType  string         `json:"discount_type" gorm:"not null;size:10;default:persen"`
+	SkuTarget     *string        `json:"sku_target,omitempty" gorm:"size:100;default:null"`
+	QtyMin        int            `json:"qty_min" gorm:"default:0"`
+	QtyFree       int            `json:"qty_free" gorm:"default:0"`
+	StartDate     time.Time      `json:"start_date" gorm:"not null"`
+	EndDate       time.Time      `json:"end_date" gorm:"not null"`
+	BranchID      *uuid.UUID     `json:"branch_id,omitempty" gorm:"type:uuid;default:null"`
+	IsActive      bool           `json:"is_active" gorm:"default:true"`
+	MaxUses       int            `json:"max_uses" gorm:"default:0"`
+	CurrentUses   int            `json:"current_uses" gorm:"default:0"`
+	CreatedAt     time.Time      `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt     time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
+	DeletedAt     gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
+}
+
+type CreatePromotionRequest struct {
+	Name          string     `json:"name"`
+	Type          string     `json:"type"`
+	Code          *string    `json:"code,omitempty"`
+	DiscountValue float64    `json:"discount_value"`
+	DiscountType  string     `json:"discount_type"`
+	SkuTarget     *string    `json:"sku_target,omitempty"`
+	QtyMin        int        `json:"qty_min"`
+	QtyFree       int        `json:"qty_free"`
+	StartDate     time.Time  `json:"start_date"`
+	EndDate       time.Time  `json:"end_date"`
+	BranchID      *uuid.UUID `json:"branch_id,omitempty"`
+	IsActive      *bool      `json:"is_active,omitempty"`
+	MaxUses       int        `json:"max_uses"`
+}
+
+type UpdatePromotionRequest struct {
+	Name          *string    `json:"name,omitempty"`
+	Type          *string    `json:"type,omitempty"`
+	Code          *string    `json:"code,omitempty"`
+	DiscountValue *float64   `json:"discount_value,omitempty"`
+	DiscountType  *string    `json:"discount_type,omitempty"`
+	SkuTarget     *string    `json:"sku_target,omitempty"`
+	QtyMin        *int       `json:"qty_min,omitempty"`
+	QtyFree       *int       `json:"qty_free,omitempty"`
+	StartDate     *time.Time `json:"start_date,omitempty"`
+	EndDate       *time.Time `json:"end_date,omitempty"`
+	BranchID      *uuid.UUID `json:"branch_id,omitempty"`
+	IsActive      *bool      `json:"is_active,omitempty"`
+	MaxUses       *int       `json:"max_uses,omitempty"`
+}
+
+type ValidateVoucherRequest struct {
+	Code     string  `json:"code"`
+	BranchID string  `json:"branch_id"`
+	Total    float64 `json:"total"`
+}
+
+type ValidateVoucherResponse struct {
+	Valid         bool    `json:"valid"`
+	DiscountValue float64 `json:"discount_value,omitempty"`
+	DiscountType  string  `json:"discount_type,omitempty"`
+	PromotionName string  `json:"promotion_name,omitempty"`
+	Error         string  `json:"error,omitempty"`
+}

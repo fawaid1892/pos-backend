@@ -55,6 +55,7 @@ func Migrate() error {
 		&model.Permission{},
 		&model.Role{},
 		&model.RolePermission{},
+		&model.Promotion{},
 	); err != nil {
 		return fmt.Errorf("auto migrate: %w", err)
 	}
@@ -221,6 +222,11 @@ func Seed() error {
 		{Name: "roles.create", Label: "Menambah Role", Group: "roles"},
 		{Name: "roles.update", Label: "Mengubah Role", Group: "roles"},
 		{Name: "roles.delete", Label: "Menghapus Role", Group: "roles"},
+		// Promotions
+		{Name: "promotions.read", Label: "Melihat Promosi", Group: "promotions"},
+		{Name: "promotions.create", Label: "Menambah Promosi", Group: "promotions"},
+		{Name: "promotions.update", Label: "Mengubah Promosi", Group: "promotions"},
+		{Name: "promotions.delete", Label: "Menghapus Promosi", Group: "promotions"},
 	}
 
 	permMap := make(map[string]uuid.UUID)
