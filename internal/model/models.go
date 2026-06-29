@@ -94,7 +94,9 @@ type Product struct {
 	CategoryID   uuid.UUID      `json:"category_id" gorm:"type:uuid;not null"`
 	CategoryName string         `json:"category_name,omitempty" gorm:"-:all"` // joined field, not stored
 	Name         string         `json:"name" gorm:"not null;size:200;index"`
-	Barcode      string         `json:"barcode" gorm:"uniqueIndex;size:100"`
+	Code         *string        `json:"code" gorm:"uniqueIndex;size:100;default:null"`
+	Barcode      *string        `json:"barcode" gorm:"uniqueIndex;size:100;default:null"`
+	Unit         string         `json:"unit" gorm:"size:20;default:PCS"`
 	Price        float64        `json:"price" gorm:"not null;default:0"`
 	CostPrice    float64        `json:"cost_price" gorm:"default:0"`
 	Stock        int            `json:"stock" gorm:"default:0"`
@@ -106,7 +108,9 @@ type Product struct {
 type CreateProductRequest struct {
 	CategoryID uuid.UUID `json:"category_id"`
 	Name       string    `json:"name"`
-	Barcode    string    `json:"barcode"`
+	Code       *string   `json:"code,omitempty"`
+	Barcode    *string   `json:"barcode,omitempty"`
+	Unit       string    `json:"unit"`
 	Price      float64   `json:"price"`
 	CostPrice  float64   `json:"cost_price"`
 	Stock      int       `json:"stock"`
@@ -115,7 +119,9 @@ type CreateProductRequest struct {
 type UpdateProductRequest struct {
 	CategoryID uuid.UUID `json:"category_id"`
 	Name       string    `json:"name"`
-	Barcode    string    `json:"barcode"`
+	Code       *string   `json:"code,omitempty"`
+	Barcode    *string   `json:"barcode,omitempty"`
+	Unit       string    `json:"unit"`
 	Price      float64   `json:"price"`
 	CostPrice  float64   `json:"cost_price"`
 	Stock      int       `json:"stock"`

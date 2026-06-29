@@ -166,11 +166,15 @@ func Seed() error {
 	DB.Where("name = ?", "Alat Tulis").First(&alatTulis)
 
 	// Create products
+	barcode1 := "8991001001001"
+	barcode2 := "8991001001002"
+	barcode3 := "8991001001003"
+	barcode4 := "8991001001004"
 	products := []model.Product{
-		{CategoryID: makanan.ID, Name: "Nasi Goreng", Barcode: "8991001001001", Price: 15000, Stock: 50},
-		{CategoryID: minuman.ID, Name: "Air Mineral 600ml", Barcode: "8991001001002", Price: 5000, Stock: 100},
-		{CategoryID: snack.ID, Name: "Keripik Singkong", Barcode: "8991001001003", Price: 8000, Stock: 75},
-		{CategoryID: alatTulis.ID, Name: "Pulpen Standard", Barcode: "8991001001004", Price: 3000, Stock: 200},
+		{CategoryID: makanan.ID, Name: "Nasi Goreng", Barcode: &barcode1, Unit: "PCS", Price: 15000, Stock: 50},
+		{CategoryID: minuman.ID, Name: "Air Mineral 600ml", Barcode: &barcode2, Unit: "PCS", Price: 5000, Stock: 100},
+		{CategoryID: snack.ID, Name: "Keripik Singkong", Barcode: &barcode3, Unit: "PCS", Price: 8000, Stock: 75},
+		{CategoryID: alatTulis.ID, Name: "Pulpen Standard", Barcode: &barcode4, Unit: "PCS", Price: 3000, Stock: 200},
 	}
 	for _, prod := range products {
 		if err := DB.Create(&prod).Error; err != nil {

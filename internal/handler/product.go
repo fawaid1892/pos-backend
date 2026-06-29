@@ -77,8 +77,8 @@ func (h *ProductHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
-	if req.Name == "" || req.Barcode == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name and barcode are required"})
+	if req.Name == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name is required"})
 		return
 	}
 
@@ -93,15 +93,17 @@ func (h *ProductHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Bug A: Check barcode duplicate
-	barcodeExists, err := repository.CheckBarcodeExists(req.Barcode)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	if barcodeExists {
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "barcode already exists"})
-		return
+	// Bug A: Check barcode duplicate (skip if empty)
+	if req.Barcode != nil && *req.Barcode != "" {
+		barcodeExists, err := repository.CheckBarcodeExists(*req.Barcode)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		if barcodeExists {
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "barcode already exists"})
+			return
+		}
 	}
 
 	product, err := repository.CreateProduct(req)

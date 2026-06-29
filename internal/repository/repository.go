@@ -146,6 +146,9 @@ type ListProductsParams struct {
 }
 
 func CheckBarcodeExists(barcode string) (bool, error) {
+	if barcode == "" {
+		return false, nil
+	}
 	var count int64
 	err := database.DB.Model(&model.Product{}).Where("barcode = ? AND deleted_at IS NULL", barcode).Limit(1).Count(&count).Error
 	return count > 0, err
@@ -160,7 +163,7 @@ func CheckCategoryExists(id uuid.UUID) (bool, error) {
 func ListProducts(p ListProductsParams) ([]model.Product, error) {
 	query := database.DB.Table("products p").
 		Select(`p.id, p.category_id, COALESCE(c.name,'') as category_name,
-		        p.name, p.barcode, p.price, COALESCE(p.cost_price, 0), p.stock,
+		        p.name, p.code, p.barcode, p.unit, p.price, COALESCE(p.cost_price, 0), p.stock,
 		        p.created_at, p.updated_at, p.deleted_at`).
 		Joins("LEFT JOIN categories c ON c.id = p.category_id").
 		Where("p.deleted_at IS NULL")
@@ -207,7 +210,7 @@ func GetProductByID(id uuid.UUID) (*model.Product, error) {
 	p := &model.Product{}
 	err := database.DB.Table("products p").
 		Select(`p.id, p.category_id, COALESCE(c.name,'') as category_name,
-		        p.name, p.barcode, p.price, COALESCE(p.cost_price, 0), p.stock,
+		        p.name, p.code, p.barcode, p.unit, p.price, COALESCE(p.cost_price, 0), p.stock,
 		        p.created_at, p.updated_at, p.deleted_at`).
 		Joins("LEFT JOIN categories c ON c.id = p.category_id").
 		Where("p.id = ? AND p.deleted_at IS NULL", id).
@@ -222,10 +225,16 @@ func GetProductByID(id uuid.UUID) (*model.Product, error) {
 }
 
 func CreateProduct(req model.CreateProductRequest) (*model.Product, error) {
+	unit := req.Unit
+	if unit == "" {
+		unit = "PCS"
+	}
 	p := &model.Product{
 		CategoryID: req.CategoryID,
 		Name:       req.Name,
+		Code:       req.Code,
 		Barcode:    req.Barcode,
+		Unit:       unit,
 		Price:      req.Price,
 		CostPrice:  req.CostPrice,
 		Stock:      req.Stock,
@@ -242,7 +251,9 @@ func UpdateProduct(id uuid.UUID, req model.UpdateProductRequest) (*model.Product
 	err := database.DB.Model(p).Where("id = ? AND deleted_at IS NULL", id).Updates(map[string]interface{}{
 		"category_id": req.CategoryID,
 		"name":        req.Name,
+		"code":        req.Code,
 		"barcode":     req.Barcode,
+		"unit":        req.Unit,
 		"price":       req.Price,
 		"cost_price":  req.CostPrice,
 		"stock":       req.Stock,
