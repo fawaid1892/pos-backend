@@ -6,7 +6,6 @@ import (
 
 	"pos-multi-branch/backend/internal/config"
 	"pos-multi-branch/backend/internal/database"
-	"pos-multi-branch/backend/internal/electric"
 	"pos-multi-branch/backend/internal/handler"
 	"pos-multi-branch/backend/internal/middleware"
 	"pos-multi-branch/backend/internal/ws"
@@ -23,10 +22,8 @@ func main() {
 
 	log.Printf("ElectricSQL URL: %s", cfg.ElectricURL)
 
-	// ─── ElectricSQL shapes ───
-	if err := electric.InitShapes(cfg.ElectricURL); err != nil {
-		log.Printf("[electric] failed to init shapes: %v", err)
-	}
+	// ElectricSQL — shapes managed via dashboard not API
+	log.Printf("ElectricSQL URL: %s (shapes managed via dashboard)", cfg.ElectricURL)
 
 	// JWT
 	middleware.InitJWT(cfg)
