@@ -64,13 +64,17 @@ func Migrate() error {
 }
 
 func Seed() error {
-	var count int64
-	DB.Model(&model.User{}).Count(&count)
-	if count > 0 {
-		log.Println("Seed: users already exist, skipping")
-		return nil
-	}
-	log.Println("Seed: no users found, creating default data...")
+	log.Println("Seed: overwriting existing data...")
+
+	// Delete existing data in reverse dependency order
+	DB.Exec("DELETE FROM transaction_items")
+	DB.Exec("DELETE FROM transactions")
+	DB.Exec("DELETE FROM stock_mutations")
+	DB.Exec("DELETE FROM branch_products")
+	DB.Exec("DELETE FROM products")
+	DB.Exec("DELETE FROM categories")
+	DB.Exec("DELETE FROM users")
+	DB.Exec("DELETE FROM branches")
 
 	// Hash the default password
 	hashed, err := bcrypt.GenerateFromPassword([]byte("password123"), 10)
