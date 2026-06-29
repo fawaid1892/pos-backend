@@ -8,6 +8,7 @@ import (
 	"pos-multi-branch/backend/internal/database"
 	"pos-multi-branch/backend/internal/handler"
 	"pos-multi-branch/backend/internal/middleware"
+	"pos-multi-branch/backend/internal/repository"
 	"pos-multi-branch/backend/internal/ws"
 )
 
@@ -42,6 +43,10 @@ func main() {
 	userH := handler.NewUserHandler()
 	dashboardH := handler.NewDashboardHandler()
 	electricH := handler.NewElectricHandler()
+	roleH := handler.NewRoleHandler()
+
+	// Wire up the RoleHasPermission function (avoids circular import)
+	middleware.RoleHasPermission = repository.RoleHasPermission
 
 	// WebSocket hub for realtime notifications
 	wsHub := ws.NewHub()
@@ -58,63 +63,71 @@ func main() {
 	// ─── Protected routes (with auth middleware) ───
 	protected := http.NewServeMux()
 
-	// RBAC wrappers for role-based access control
-	adminOnly := middleware.RequireRole("admin_cabang")
-	adminOrOwner := middleware.RequireRole("admin_cabang", "owner")
-	kasirOrAdmin := middleware.RequireRole("kasir", "admin_cabang")
+	// requirePerm is a shorthand for permission-based RBAC middleware
+	requirePerm := middleware.RequirePermission
 
 	// Auth
 	protected.HandleFunc("GET /api/v1/auth/me", authH.Me)
 	protected.HandleFunc("POST /api/v1/auth/logout", authH.Logout)
 
-	// Branches CRUD → admin only
-	protected.Handle("GET /api/v1/branches", adminOnly(http.HandlerFunc(branchH.List)))
-	protected.Handle("GET /api/v1/branches/{id}", adminOnly(http.HandlerFunc(branchH.GetByID)))
-	protected.Handle("POST /api/v1/branches", adminOnly(http.HandlerFunc(branchH.Create)))
-	protected.Handle("PUT /api/v1/branches/{id}", adminOnly(http.HandlerFunc(branchH.Update)))
-	protected.Handle("DELETE /api/v1/branches/{id}", adminOnly(http.HandlerFunc(branchH.Delete)))
+	// Branches CRUD → branches.*
+	protected.Handle("GET /api/v1/branches", requirePerm("branches.read")(http.HandlerFunc(branchH.List)))
+	protected.Handle("GET /api/v1/branches/{id}", requirePerm("branches.read")(http.HandlerFunc(branchH.GetByID)))
+	protected.Handle("POST /api/v1/branches", requirePerm("branches.create")(http.HandlerFunc(branchH.Create)))
+	protected.Handle("PUT /api/v1/branches/{id}", requirePerm("branches.update")(http.HandlerFunc(branchH.Update)))
+	protected.Handle("DELETE /api/v1/branches/{id}", requirePerm("branches.delete")(http.HandlerFunc(branchH.Delete)))
 
-	// Products → list & detail for kasir+admin, create/update/delete for admin only
-	protected.Handle("GET /api/v1/products", kasirOrAdmin(http.HandlerFunc(productH.List)))
-	protected.Handle("GET /api/v1/products/{id}", kasirOrAdmin(http.HandlerFunc(productH.GetByID)))
-	protected.Handle("POST /api/v1/products", adminOnly(http.HandlerFunc(productH.Create)))
-	protected.Handle("PUT /api/v1/products/{id}", adminOnly(http.HandlerFunc(productH.Update)))
-	protected.Handle("DELETE /api/v1/products/{id}", adminOnly(http.HandlerFunc(productH.Delete)))
+	// Products → products.*
+	protected.Handle("GET /api/v1/products", requirePerm("products.read")(http.HandlerFunc(productH.List)))
+	protected.Handle("GET /api/v1/products/{id}", requirePerm("products.read")(http.HandlerFunc(productH.GetByID)))
+	protected.Handle("POST /api/v1/products", requirePerm("products.create")(http.HandlerFunc(productH.Create)))
+	protected.Handle("PUT /api/v1/products/{id}", requirePerm("products.update")(http.HandlerFunc(productH.Update)))
+	protected.Handle("DELETE /api/v1/products/{id}", requirePerm("products.delete")(http.HandlerFunc(productH.Delete)))
 
-	// Categories → list for kasir+admin, create for admin only
-	protected.Handle("GET /api/v1/categories", kasirOrAdmin(http.HandlerFunc(productH.ListCategories)))
-	protected.Handle("POST /api/v1/categories", adminOnly(http.HandlerFunc(productH.CreateCategory)))
+	// Categories → categories.*
+	protected.Handle("GET /api/v1/categories", requirePerm("categories.read")(http.HandlerFunc(productH.ListCategories)))
+	protected.Handle("POST /api/v1/categories", requirePerm("categories.create")(http.HandlerFunc(productH.CreateCategory)))
 
-	// Transactions → kasir + admin
-	protected.Handle("GET /api/v1/transactions", kasirOrAdmin(http.HandlerFunc(txH.List)))
-	protected.Handle("GET /api/v1/transactions/{id}", kasirOrAdmin(http.HandlerFunc(txH.GetByID)))
-	protected.Handle("POST /api/v1/transactions/checkout", kasirOrAdmin(http.HandlerFunc(txH.Checkout)))
+	// Transactions → transactions.*
+	protected.Handle("GET /api/v1/transactions", requirePerm("transactions.read")(http.HandlerFunc(txH.List)))
+	protected.Handle("GET /api/v1/transactions/{id}", requirePerm("transactions.read")(http.HandlerFunc(txH.GetByID)))
+	protected.Handle("POST /api/v1/transactions/checkout", requirePerm("transactions.create")(http.HandlerFunc(txH.Checkout)))
 
-	// Stock / Inventory → admin only (manage stock)
-	protected.Handle("POST /api/v1/branches/{id}/inventory/adjustment", adminOnly(http.HandlerFunc(stockH.Adjustment)))
-	protected.Handle("POST /api/v1/inventory/transfer", adminOnly(http.HandlerFunc(stockH.Transfer)))
-	protected.Handle("GET /api/v1/branches/{id}/inventory", adminOnly(http.HandlerFunc(stockH.ListInventory)))
-	protected.Handle("GET /api/v1/branches/{id}/inventory/low-stock", adminOnly(http.HandlerFunc(stockH.LowStock)))
+	// Stock / Inventory → stock.*
+	protected.Handle("POST /api/v1/branches/{id}/inventory/adjustment", requirePerm("stock.adjust")(http.HandlerFunc(stockH.Adjustment)))
+	protected.Handle("POST /api/v1/inventory/transfer", requirePerm("stock.transfer")(http.HandlerFunc(stockH.Transfer)))
+	protected.Handle("GET /api/v1/branches/{id}/inventory", requirePerm("stock.read")(http.HandlerFunc(stockH.ListInventory)))
+	protected.Handle("GET /api/v1/branches/{id}/inventory/low-stock", requirePerm("stock.read")(http.HandlerFunc(stockH.LowStock)))
 
-	// Reports → admin + owner
-	protected.Handle("GET /api/v1/branches/{id}/reports/sales", adminOrOwner(http.HandlerFunc(reportH.Sales)))
-	protected.Handle("GET /api/v1/branches/{id}/reports/sales.pdf", adminOrOwner(http.HandlerFunc(reportH.SalesPDF)))
-	protected.Handle("GET /api/v1/branches/{id}/reports/stock", adminOrOwner(http.HandlerFunc(reportH.Stock)))
-	protected.Handle("GET /api/v1/branches/{id}/reports/profit-loss", adminOrOwner(http.HandlerFunc(reportH.ProfitLoss)))
+	// Reports → reports.*
+	protected.Handle("GET /api/v1/branches/{id}/reports/sales", requirePerm("reports.sales")(http.HandlerFunc(reportH.Sales)))
+	protected.Handle("GET /api/v1/branches/{id}/reports/sales.pdf", requirePerm("reports.sales")(http.HandlerFunc(reportH.SalesPDF)))
+	protected.Handle("GET /api/v1/branches/{id}/reports/stock", requirePerm("reports.stock")(http.HandlerFunc(reportH.Stock)))
+	protected.Handle("GET /api/v1/branches/{id}/reports/profit-loss", requirePerm("reports.profit-loss")(http.HandlerFunc(reportH.ProfitLoss)))
 
-	// Export → admin + owner
-	protected.Handle("GET /api/v1/branches/{id}/reports/sales/export", adminOrOwner(http.HandlerFunc(exportH.SalesExport)))
+	// Export → reports.sales
+	protected.Handle("GET /api/v1/branches/{id}/reports/sales/export", requirePerm("reports.sales")(http.HandlerFunc(exportH.SalesExport)))
 
-	// Users management → admin only
-	protected.Handle("GET /api/v1/users", adminOnly(http.HandlerFunc(userH.List)))
-	protected.Handle("GET /api/v1/users/{id}", adminOnly(http.HandlerFunc(userH.GetByID)))
-	protected.Handle("POST /api/v1/users", adminOnly(http.HandlerFunc(userH.Create)))
-	protected.Handle("PUT /api/v1/users/{id}", adminOnly(http.HandlerFunc(userH.Update)))
-	protected.Handle("DELETE /api/v1/users/{id}", adminOnly(http.HandlerFunc(userH.Delete)))
+	// Users management → users.*
+	protected.Handle("GET /api/v1/users", requirePerm("users.read")(http.HandlerFunc(userH.List)))
+	protected.Handle("GET /api/v1/users/{id}", requirePerm("users.read")(http.HandlerFunc(userH.GetByID)))
+	protected.Handle("POST /api/v1/users", requirePerm("users.create")(http.HandlerFunc(userH.Create)))
+	protected.Handle("PUT /api/v1/users/{id}", requirePerm("users.update")(http.HandlerFunc(userH.Update)))
+	protected.Handle("DELETE /api/v1/users/{id}", requirePerm("users.delete")(http.HandlerFunc(userH.Delete)))
 
-	// Dashboard → admin + owner only
-	protected.Handle("GET /api/v1/dashboard/stats", adminOrOwner(http.HandlerFunc(dashboardH.DashboardStats)))
-	protected.Handle("GET /api/v1/dashboard/sales-chart", adminOrOwner(http.HandlerFunc(dashboardH.SalesChart)))
+	// Dashboard → dashboard.*
+	protected.Handle("GET /api/v1/dashboard/stats", requirePerm("dashboard.stats")(http.HandlerFunc(dashboardH.DashboardStats)))
+	protected.Handle("GET /api/v1/dashboard/sales-chart", requirePerm("dashboard.sales-chart")(http.HandlerFunc(dashboardH.SalesChart)))
+
+	// Roles management → roles.*
+	protected.Handle("GET /api/v1/roles", requirePerm("roles.read")(http.HandlerFunc(roleH.List)))
+	protected.Handle("GET /api/v1/roles/{id}", requirePerm("roles.read")(http.HandlerFunc(roleH.GetByID)))
+	protected.Handle("POST /api/v1/roles", requirePerm("roles.create")(http.HandlerFunc(roleH.Create)))
+	protected.Handle("PUT /api/v1/roles/{id}", requirePerm("roles.update")(http.HandlerFunc(roleH.Update)))
+	protected.Handle("DELETE /api/v1/roles/{id}", requirePerm("roles.delete")(http.HandlerFunc(roleH.Delete)))
+	protected.Handle("GET /api/v1/roles/permissions/list", requirePerm("roles.read")(http.HandlerFunc(roleH.PermissionsList)))
+	protected.Handle("GET /api/v1/roles/{id}/permissions", requirePerm("roles.read")(http.HandlerFunc(roleH.GetPermissions)))
+	protected.Handle("PUT /api/v1/roles/{id}/permissions", requirePerm("roles.update")(http.HandlerFunc(roleH.SetPermissions)))
 
 	// ElectricSQL shape status
 	protected.HandleFunc("GET /api/v1/electric/shapes", electricH.Shapes)

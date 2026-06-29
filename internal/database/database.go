@@ -7,6 +7,7 @@ import (
 
 	"pos-multi-branch/backend/internal/model"
 
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -51,6 +52,9 @@ func Migrate() error {
 		&model.BranchProduct{},
 		&model.StockMutation{},
 		&model.RefreshToken{},
+		&model.Permission{},
+		&model.Role{},
+		&model.RolePermission{},
 	); err != nil {
 		return fmt.Errorf("auto migrate: %w", err)
 	}
@@ -174,6 +178,125 @@ func Seed() error {
 		}
 	}
 	log.Println("Seed: products created")
+
+	// ─── Seed Permissions ───
+	permissions := []model.Permission{
+		{Name: "products.read", Label: "Melihat Produk", Group: "products"},
+		{Name: "products.create", Label: "Menambah Produk", Group: "products"},
+		{Name: "products.update", Label: "Mengubah Produk", Group: "products"},
+		{Name: "products.delete", Label: "Menghapus Produk", Group: "products"},
+		{Name: "categories.read", Label: "Melihat Kategori", Group: "categories"},
+		{Name: "categories.create", Label: "Menambah Kategori", Group: "categories"},
+		{Name: "branches.read", Label: "Melihat Cabang", Group: "branches"},
+		{Name: "branches.create", Label: "Menambah Cabang", Group: "branches"},
+		{Name: "branches.update", Label: "Mengubah Cabang", Group: "branches"},
+		{Name: "branches.delete", Label: "Menghapus Cabang", Group: "branches"},
+		{Name: "users.read", Label: "Melihat Pengguna", Group: "users"},
+		{Name: "users.create", Label: "Menambah Pengguna", Group: "users"},
+		{Name: "users.update", Label: "Mengubah Pengguna", Group: "users"},
+		{Name: "users.delete", Label: "Menghapus Pengguna", Group: "users"},
+		{Name: "transactions.read", Label: "Melihat Transaksi", Group: "transactions"},
+		{Name: "transactions.create", Label: "Membuat Transaksi", Group: "transactions"},
+		{Name: "stock.read", Label: "Melihat Stok", Group: "stock"},
+		{Name: "stock.adjust", Label: "Menyesuaikan Stok", Group: "stock"},
+		{Name: "stock.transfer", Label: "Transfer Stok", Group: "stock"},
+		{Name: "reports.sales", Label: "Laporan Penjualan", Group: "reports"},
+		{Name: "reports.stock", Label: "Laporan Stok", Group: "reports"},
+		{Name: "reports.profit-loss", Label: "Laporan Laba Rugi", Group: "reports"},
+		{Name: "dashboard.stats", Label: "Statistik Dashboard", Group: "dashboard"},
+		{Name: "dashboard.sales-chart", Label: "Grafik Penjualan", Group: "dashboard"},
+		{Name: "settings.read", Label: "Melihat Pengaturan", Group: "settings"},
+		{Name: "settings.update", Label: "Mengubah Pengaturan", Group: "settings"},
+		{Name: "roles.read", Label: "Melihat Role", Group: "roles"},
+		{Name: "roles.create", Label: "Menambah Role", Group: "roles"},
+		{Name: "roles.update", Label: "Mengubah Role", Group: "roles"},
+		{Name: "roles.delete", Label: "Menghapus Role", Group: "roles"},
+	}
+
+	permMap := make(map[string]uuid.UUID)
+	for _, p := range permissions {
+		var existing model.Permission
+		if err := DB.Where("name = ?", p.Name).First(&existing).Error; err != nil {
+			DB.Create(&p)
+			permMap[p.Name] = p.ID
+		} else {
+			permMap[p.Name] = existing.ID
+		}
+	}
+	log.Println("Seed: permissions seeded")
+
+	// ─── Seed Roles ───
+	kasirRole := model.Role{Name: "kasir", Description: "Kasir — melayani transaksi", IsSystem: true}
+	adminRole := model.Role{Name: "admin_cabang", Description: "Admin cabang — mengelola operasional cabang", IsSystem: true}
+	ownerRole := model.Role{Name: "owner", Description: "Pemilik — akses penuh", IsSystem: true}
+
+	var existingKasir, existingAdmin, existingOwner model.Role
+	DB.Where("name = ?", "kasir").First(&existingKasir)
+	DB.Where("name = ?", "admin_cabang").First(&existingAdmin)
+	DB.Where("name = ?", "owner").First(&existingOwner)
+
+	kasirRoleID := existingKasir.ID
+	adminRoleID := existingAdmin.ID
+	ownerRoleID := existingOwner.ID
+
+	if kasirRoleID == uuid.Nil {
+		DB.Create(&kasirRole)
+		kasirRoleID = kasirRole.ID
+	}
+	if adminRoleID == uuid.Nil {
+		DB.Create(&adminRole)
+		adminRoleID = adminRole.ID
+	}
+	if ownerRoleID == uuid.Nil {
+		DB.Create(&ownerRole)
+		ownerRoleID = ownerRole.ID
+	}
+	log.Println("Seed: roles seeded")
+
+	// ─── Assign Permissions ───
+	// kasir: products.read, categories.read, transactions.read, transactions.create, stock.read, stock.adjust
+	kasirPerms := []string{"products.read", "categories.read", "transactions.read", "transactions.create", "stock.read", "stock.adjust"}
+
+	// admin_cabang: ALL except roles.*
+	// owner: ALL
+
+	// Clear old permissions
+	DB.Where("role_id IN (?, ?, ?)", kasirRoleID, adminRoleID, ownerRoleID).Delete(&model.RolePermission{})
+
+	// Helper to assign perms
+	assignPerms := func(roleID uuid.UUID, permNames []string) {
+		for _, name := range permNames {
+			if pid, ok := permMap[name]; ok {
+				DB.Create(&model.RolePermission{RoleID: roleID, PermissionID: pid})
+			}
+		}
+	}
+
+	assignPerms(kasirRoleID, kasirPerms)
+
+	// admin_cabang: all except roles.*
+	var adminPerms []string
+	for name := range permMap {
+		if name != "roles.read" && name != "roles.create" && name != "roles.update" && name != "roles.delete" {
+			adminPerms = append(adminPerms, name)
+		}
+	}
+	assignPerms(adminRoleID, adminPerms)
+
+	// owner: all
+	var allPerms []string
+	for name := range permMap {
+		allPerms = append(allPerms, name)
+	}
+	assignPerms(ownerRoleID, allPerms)
+
+	log.Println("Seed: role permissions assigned")
+
+	// ─── Assign roles to seed users ───
+	DB.Model(&model.User{}).Where("username = ?", "admin").UpdateColumn("role_id", adminRoleID)
+	DB.Model(&model.User{}).Where("username = ?", "kasir1").UpdateColumn("role_id", kasirRoleID)
+	DB.Model(&model.User{}).Where("username = ?", "owner").UpdateColumn("role_id", ownerRoleID)
+	log.Println("Seed: role IDs assigned to seed users")
 
 	log.Println("Seed: default data seeded successfully")
 	return nil

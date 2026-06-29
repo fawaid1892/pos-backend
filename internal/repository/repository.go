@@ -868,3 +868,120 @@ func SoftDeleteUser(id uuid.UUID) error {
 	}
 	return nil
 }
+
+// ─── RBAC ───
+
+func RoleHasPermission(roleID uuid.UUID, permissionName string) (bool, error) {
+	var count int64
+	err := database.DB.Table("role_permissions rp").
+		Joins("JOIN permissions p ON p.id = rp.permission_id").
+		Where("rp.role_id = ? AND p.name = ?", roleID, permissionName).
+		Limit(1).
+		Count(&count).Error
+	return count > 0, err
+}
+
+func ListRoles() ([]model.Role, error) {
+	var roles []model.Role
+	err := database.DB.Where("deleted_at IS NULL").Order("name").Find(&roles).Error
+	return roles, err
+}
+
+func GetRoleByID(id uuid.UUID) (*model.Role, error) {
+	var role model.Role
+	err := database.DB.Where("id = ? AND deleted_at IS NULL", id).First(&role).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &role, nil
+}
+
+func ListPermissions() ([]model.Permission, error) {
+	var perms []model.Permission
+	err := database.DB.Order("group, name").Find(&perms).Error
+	return perms, err
+}
+
+func GetRolePermissions(roleID uuid.UUID) ([]model.Permission, error) {
+	var perms []model.Permission
+	err := database.DB.Table("permissions p").
+		Joins("JOIN role_permissions rp ON rp.permission_id = p.id").
+		Where("rp.role_id = ?", roleID).
+		Order("p.group, p.name").
+		Find(&perms).Error
+	return perms, err
+}
+
+func SetRolePermissions(roleID uuid.UUID, permissionIDs []uuid.UUID) error {
+	tx := database.DB.Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+	defer tx.Rollback()
+
+	// Delete existing permissions for this role
+	if err := tx.Where("role_id = ?", roleID).Delete(&model.RolePermission{}).Error; err != nil {
+		return err
+	}
+
+	// Insert new permissions
+	for _, pid := range permissionIDs {
+		if err := tx.Create(&model.RolePermission{RoleID: roleID, PermissionID: pid}).Error; err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit().Error
+}
+
+func CreateRole(name, description string) (*model.Role, error) {
+	role := &model.Role{
+		Name:        name,
+		Description: description,
+		IsSystem:    false,
+	}
+	err := database.DB.Create(role).Error
+	if err != nil {
+		return nil, err
+	}
+	return role, nil
+}
+
+func UpdateRole(id uuid.UUID, name, description string) (*model.Role, error) {
+	role := &model.Role{}
+	err := database.DB.Model(role).Where("id = ? AND deleted_at IS NULL", id).Updates(map[string]interface{}{
+		"name":        name,
+		"description": description,
+	}).First(role).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return role, nil
+}
+
+func SoftDeleteRole(id uuid.UUID) error {
+	// Check if any users reference this role
+	var count int64
+	err := database.DB.Model(&model.User{}).Where("role_id = ?", id).Limit(1).Count(&count).Error
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return errors.New("cannot delete role: users are assigned to this role")
+	}
+
+	result := database.DB.Where("id = ? AND deleted_at IS NULL", id).Delete(&model.Role{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return errors.New("role not found")
+	}
+	return nil
+}

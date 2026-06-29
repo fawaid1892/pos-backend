@@ -14,6 +14,7 @@ type User struct {
 	Password  string         `json:"-" gorm:"not null"`
 	FullName  string         `json:"full_name" gorm:"size:200;default:''"`
 	Role      string         `json:"role" gorm:"size:20;default:kasir"` // owner, admin_cabang, kasir
+	RoleID    *uuid.UUID     `json:"role_id,omitempty" gorm:"type:uuid"`
 	BranchID  *uuid.UUID     `json:"branch_id,omitempty" gorm:"type:uuid"`
 	IsActive  bool           `json:"is_active" gorm:"default:true"`
 	CreatedAt time.Time      `json:"created_at" gorm:"autoCreateTime"`
@@ -333,6 +334,32 @@ type SalesChartResponse struct {
 		End   string `json:"end"`
 	} `json:"period"`
 	Rows []SalesChartRow `json:"rows"`
+}
+
+// ─── RBAC ───
+
+type Permission struct {
+	ID        uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	Name      string    `json:"name" gorm:"uniqueIndex;not null;size:100"`
+	Label     string    `json:"label" gorm:"size:200;default:''"`
+	Group     string    `json:"group" gorm:"size:50;default:''"`
+	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+}
+
+type Role struct {
+	ID          uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	Name        string         `json:"name" gorm:"uniqueIndex;not null;size:50"`
+	Description string         `json:"description" gorm:"size:255;default:''"`
+	IsSystem    bool           `json:"is_system" gorm:"default:false"`
+	CreatedAt   time.Time      `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt   time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
+	DeletedAt   gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
+}
+
+type RolePermission struct {
+	RoleID       uuid.UUID `json:"role_id" gorm:"type:uuid;primaryKey"`
+	PermissionID uuid.UUID `json:"permission_id" gorm:"type:uuid;primaryKey"`
 }
 
 // ─── Generic API Response ───

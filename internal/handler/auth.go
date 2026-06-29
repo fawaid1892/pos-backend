@@ -40,7 +40,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := middleware.GenerateToken(user.ID, user.Role, user.BranchID, h.cfg.JWTExpiryHours)
+	token, err := middleware.GenerateToken(user.ID, user.Role, user.RoleID, user.BranchID, h.cfg.JWTExpiryHours)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "token generation failed"})
 		return
@@ -101,7 +101,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate new access token
-	token, err := middleware.GenerateToken(user.ID, user.Role, user.BranchID, h.cfg.JWTExpiryHours)
+	token, err := middleware.GenerateToken(user.ID, user.Role, user.RoleID, user.BranchID, h.cfg.JWTExpiryHours)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "token generation failed"})
 		return
