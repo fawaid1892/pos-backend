@@ -1,48 +1,15 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: pos_multi_branch
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./migrations:/docker-entrypoint-initdb.d
-    command: ["postgres", "-c", "wal_level=logical"]
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  electric:
-    image: electricsql/electric:latest
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/pos_multi_branch
-      ELECTRIC_HOST: 0.0.0.0
-      ELECTRIC_INSECURE: "true"
-    ports:
-      - "5133:5133"
-    depends_on:
-      postgres:
-        condition: service_healthy
-
   backend:
     build: .
     ports:
       - "8080:8080"
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/pos_multi_branch
+      DATABASE_URL: postgresql://postgres.yelouvfkrmszqhicarjh:[YOUR-PASSWORD]@aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true
       JWT_SECRET: ${JWT_SECRET:-default-dev-secret}
       PORT: 8080
-      ELECTRIC_URL: http://electric:5133
-    depends_on:
-      postgres:
-        condition: service_healthy
-      electric:
-        condition: service_started
+      ELECTRIC_URL: https://api.electric-sql.cloud
+      ELECTRIC_TOKEN: ${ELECTRIC_TOKEN}
+    restart: unless-stopped
 
 volumes:
   pgdata:
