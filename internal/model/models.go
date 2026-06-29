@@ -62,7 +62,7 @@ type Branch struct {
 	Address   string         `json:"address" gorm:"size:500;default:''"`
 	Phone     string         `json:"phone" gorm:"size:30;default:''"`
 	TaxRate   float64        `json:"tax_rate" gorm:"default:0"`
-	IsActive  bool           `json:"is_active" gorm:"default:true"`
+	IsActive  bool           `json:"is_active" gorm:"default:false"`
 	CreatedAt time.Time      `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
 	DeletedAt gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
