@@ -46,13 +46,13 @@ func (h *StockHandler) Adjustment(w http.ResponseWriter, r *http.Request) {
 
 	// Apply adjustment to branch_products
 	if req.Type == "in" {
-		if err := repository.UpsertBranchProduct(r.Context(), branchID, req.ProductID, req.Qty); err != nil {
+		if err := repository.UpsertBranchProduct(branchID, req.ProductID, req.Qty); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
 		}
 	} else {
 		// Check current stock before decreasing
-		bp, err := repository.GetBranchProduct(r.Context(), branchID, req.ProductID)
+		bp, err := repository.GetBranchProduct(branchID, req.ProductID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
@@ -61,7 +61,7 @@ func (h *StockHandler) Adjustment(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "insufficient stock"})
 			return
 		}
-		if err := repository.UpsertBranchProduct(r.Context(), branchID, req.ProductID, -req.Qty); err != nil {
+		if err := repository.UpsertBranchProduct(branchID, req.ProductID, -req.Qty); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
 		}
@@ -75,13 +75,13 @@ func (h *StockHandler) Adjustment(w http.ResponseWriter, r *http.Request) {
 		Qty:       req.Qty,
 		Notes:     req.Notes,
 	}
-	if err := repository.InsertStockMutation(r.Context(), mutation); err != nil {
+	if err := repository.InsertStockMutation(mutation); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 
 	// Return updated product stock
-	bp, err := repository.GetBranchProduct(r.Context(), branchID, req.ProductID)
+	bp, err := repository.GetBranchProduct(branchID, req.ProductID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -102,7 +102,7 @@ func (h *StockHandler) Adjustment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check & broadcast low stock
-	go checkAndBroadcastLowStock(r.Context(), branchID)
+	go checkAndBroadcastLowStock(branchID)
 }
 
 // POST /api/v1/inventory/transfer
@@ -125,7 +125,7 @@ func (h *StockHandler) Transfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := repository.TransferStock(r.Context(), req.SourceBranchID, req.TargetBranchID, req.ProductID, req.Qty, req.Notes); err != nil {
+	if err := repository.TransferStock(req.SourceBranchID, req.TargetBranchID, req.ProductID, req.Qty, req.Notes); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
@@ -158,7 +158,7 @@ func (h *StockHandler) ListInventory(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	offset, _ := strconv.Atoi(q.Get("offset"))
 
-	mutations, err := repository.ListStockMutations(r.Context(), branchID, limit, offset)
+	mutations, err := repository.ListStockMutations(branchID, limit, offset)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -172,7 +172,7 @@ func (h *StockHandler) ListInventory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Also include current stock summary
-	products, err := repository.ListBranchProducts(r.Context(), branchID)
+	products, err := repository.ListBranchProducts(branchID)
 	if err == nil {
 		response["products"] = products
 	}
@@ -196,7 +196,7 @@ func (h *StockHandler) LowStock(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	items, err := repository.GetLowStockProducts(r.Context(), branchID, threshold)
+	items, err := repository.GetLowStockProducts(branchID, threshold)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return

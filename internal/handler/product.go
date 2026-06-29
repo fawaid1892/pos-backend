@@ -33,7 +33,7 @@ func (h *ProductHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	products, err := repository.ListProducts(r.Context(), repository.ListProductsParams{
+	products, err := repository.ListProducts(repository.ListProductsParams{
 		Query:      q.Get("q"),
 		Barcode:    q.Get("barcode"),
 		CategoryID: q.Get("category_id"),
@@ -59,7 +59,7 @@ func (h *ProductHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
-	product, err := repository.GetProductByID(r.Context(), id)
+	product, err := repository.GetProductByID(id)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -83,7 +83,7 @@ func (h *ProductHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Bug B: Validate category_id exists
-	catExists, err := repository.CheckCategoryExists(r.Context(), req.CategoryID)
+	catExists, err := repository.CheckCategoryExists(req.CategoryID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -94,7 +94,7 @@ func (h *ProductHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Bug A: Check barcode duplicate
-	barcodeExists, err := repository.CheckBarcodeExists(r.Context(), req.Barcode)
+	barcodeExists, err := repository.CheckBarcodeExists(req.Barcode)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -104,7 +104,7 @@ func (h *ProductHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	product, err := repository.CreateProduct(r.Context(), req)
+	product, err := repository.CreateProduct(req)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -123,7 +123,7 @@ func (h *ProductHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
-	product, err := repository.UpdateProduct(r.Context(), id, req)
+	product, err := repository.UpdateProduct(id, req)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -141,7 +141,7 @@ func (h *ProductHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
-	if err := repository.SoftDeleteProduct(r.Context(), id); err != nil {
+	if err := repository.SoftDeleteProduct(id); err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 		return
 	}
@@ -151,7 +151,7 @@ func (h *ProductHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // ─── Category Sub-handler ───
 
 func (h *ProductHandler) ListCategories(w http.ResponseWriter, r *http.Request) {
-	cats, err := repository.ListCategories(r.Context())
+	cats, err := repository.ListCategories()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -174,7 +174,7 @@ func (h *ProductHandler) CreateCategory(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name is required"})
 		return
 	}
-	cat, err := repository.CreateCategory(r.Context(), body.Name)
+	cat, err := repository.CreateCategory(body.Name)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return

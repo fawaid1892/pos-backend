@@ -4,18 +4,21 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
-// User
+// ─── User ───
 type User struct {
-	ID        uuid.UUID `json:"id"`
-	Username  string    `json:"username"`
-	Password  string    `json:"-"`
-	FullName  string    `json:"full_name"`
-	Role      string    `json:"role"` // owner, admin_cabang, kasir
-	BranchID  *uuid.UUID `json:"branch_id,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	Username  string         `json:"username" gorm:"uniqueIndex;not null;size:100"`
+	Password  string         `json:"-" gorm:"not null"`
+	FullName  string         `json:"full_name" gorm:"size:200;default:''"`
+	Role      string         `json:"role" gorm:"size:20;default:kasir"` // owner, admin_cabang, kasir
+	BranchID  *uuid.UUID     `json:"branch_id,omitempty" gorm:"type:uuid"`
+	IsActive  bool           `json:"is_active" gorm:"default:true"`
+	CreatedAt time.Time      `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
+	DeletedAt gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
 }
 
 type LoginRequest struct {
@@ -32,17 +35,17 @@ type MeResponse struct {
 	User User `json:"user"`
 }
 
-// Branch
+// ─── Branch ───
 type Branch struct {
-	ID        uuid.UUID  `json:"id"`
-	Name      string     `json:"name"`
-	Address   string     `json:"address"`
-	Phone     string     `json:"phone"`
-	TaxRate   float64    `json:"tax_rate"`
-	IsActive  bool       `json:"is_active"`
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
-	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+	ID        uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	Name      string         `json:"name" gorm:"not null;size:200"`
+	Address   string         `json:"address" gorm:"size:500;default:''"`
+	Phone     string         `json:"phone" gorm:"size:30;default:''"`
+	TaxRate   float64        `json:"tax_rate" gorm:"default:0"`
+	IsActive  bool           `json:"is_active" gorm:"default:true"`
+	CreatedAt time.Time      `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
+	DeletedAt gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
 }
 
 type CreateBranchRequest struct {
@@ -57,27 +60,27 @@ type UpdateBranchRequest struct {
 	Phone   string `json:"phone"`
 }
 
-// Category
+// ─── Category ───
 type Category struct {
-	ID        uuid.UUID `json:"id"`
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	Name      string    `json:"name" gorm:"uniqueIndex;not null;size:100"`
+	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
-// Product
+// ─── Product ───
 type Product struct {
-	ID          uuid.UUID  `json:"id"`
-	CategoryID  uuid.UUID  `json:"category_id"`
-	CategoryName string    `json:"category_name,omitempty"`
-	Name        string     `json:"name"`
-	Barcode     string     `json:"barcode"`
-	Price       float64    `json:"price"`
-	CostPrice   float64    `json:"cost_price"`
-	Stock       int        `json:"stock"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-	DeletedAt   *time.Time `json:"deleted_at,omitempty"`
+	ID           uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	CategoryID   uuid.UUID      `json:"category_id" gorm:"type:uuid;not null"`
+	CategoryName string         `json:"category_name,omitempty" gorm:"-:all"` // joined field, not stored
+	Name         string         `json:"name" gorm:"not null;size:200;index"`
+	Barcode      string         `json:"barcode" gorm:"uniqueIndex;size:100"`
+	Price        float64        `json:"price" gorm:"not null;default:0"`
+	CostPrice    float64        `json:"cost_price" gorm:"default:0"`
+	Stock        int            `json:"stock" gorm:"default:0"`
+	CreatedAt    time.Time      `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt    time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
+	DeletedAt    gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
 }
 
 type CreateProductRequest struct {
@@ -105,34 +108,34 @@ type ProductSearchParams struct {
 	Offset  int    `json:"offset"`
 }
 
-// Transaction
+// ─── Transaction ───
 type Transaction struct {
-	ID              uuid.UUID  `json:"id"`
-	BranchID        uuid.UUID  `json:"branch_id"`
-	UserID          uuid.UUID  `json:"user_id"`
-	CustomerName    string     `json:"customer_name"`
-	Subtotal        float64    `json:"subtotal"`
-	DiscountPercent float64    `json:"discount_percent"`
-	DiscountAmount  float64    `json:"discount_amount"`
-	TaxRate         float64    `json:"tax_rate"`
-	TaxAmount       float64    `json:"tax_amount"`
-	Total           float64    `json:"total"`
-	CashAmount      float64    `json:"cash_amount"`
-	ChangeAmount    float64    `json:"change_amount"`
-	PaymentMethod    string     `json:"payment_method"`
-	PaymentReference string     `json:"payment_reference,omitempty"`
-	Items           []TransactionItem `json:"items,omitempty"`
-	CreatedAt       time.Time  `json:"created_at"`
+	ID               uuid.UUID         `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	BranchID         uuid.UUID         `json:"branch_id" gorm:"type:uuid;not null;index"`
+	UserID           uuid.UUID         `json:"user_id" gorm:"type:uuid;not null"`
+	CustomerName     string            `json:"customer_name" gorm:"size:200;default:''"`
+	Subtotal         float64           `json:"subtotal" gorm:"not null;default:0"`
+	DiscountPercent  float64           `json:"discount_percent" gorm:"default:0"`
+	DiscountAmount   float64           `json:"discount_amount" gorm:"default:0"`
+	TaxRate          float64           `json:"tax_rate" gorm:"default:0"`
+	TaxAmount        float64           `json:"tax_amount" gorm:"default:0"`
+	Total            float64           `json:"total" gorm:"not null;default:0"`
+	CashAmount       float64           `json:"cash_amount" gorm:"default:0"`
+	ChangeAmount     float64           `json:"change_amount" gorm:"default:0"`
+	PaymentMethod    string            `json:"payment_method" gorm:"size:20;default:cash"`
+	PaymentReference string            `json:"payment_reference,omitempty" gorm:"size:200;default:''"`
+	Items            []TransactionItem `json:"items,omitempty" gorm:"foreignKey:TransactionID;constraint:OnDelete:CASCADE"`
+	CreatedAt        time.Time         `json:"created_at" gorm:"autoCreateTime;index"`
 }
 
 type TransactionItem struct {
-	ID          uuid.UUID `json:"id"`
-	TransactionID uuid.UUID `json:"transaction_id"`
-	ProductID   uuid.UUID `json:"product_id"`
-	ProductName string    `json:"product_name"`
-	Quantity    int       `json:"quantity"`
-	Price       float64   `json:"price"`
-	Subtotal    float64   `json:"subtotal"`
+	ID            uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	TransactionID uuid.UUID `json:"transaction_id" gorm:"type:uuid;not null;index"`
+	ProductID     uuid.UUID `json:"product_id" gorm:"type:uuid;not null"`
+	ProductName   string    `json:"product_name" gorm:"size:200;default:''"`
+	Quantity      int       `json:"quantity" gorm:"not null;default:0"`
+	Price         float64   `json:"price" gorm:"not null;default:0"`
+	Subtotal      float64   `json:"subtotal" gorm:"not null;default:0"`
 }
 
 type CheckoutRequest struct {
@@ -153,33 +156,34 @@ type CheckoutItemReq struct {
 // ─── Stock ───
 
 type BranchProduct struct {
-	BranchID  uuid.UUID `json:"branch_id"`
-	ProductID uuid.UUID `json:"product_id"`
-	StockQty  float64   `json:"stock_qty"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	BranchID  uuid.UUID `json:"branch_id" gorm:"type:uuid;primaryKey"`
+	ProductID uuid.UUID `json:"product_id" gorm:"type:uuid;primaryKey"`
+	StockQty  float64   `json:"stock_qty" gorm:"default:0"`
+	MinStock  float64   `json:"min_stock" gorm:"default:0"`
+	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 
-	// Joined fields
-	ProductName string  `json:"product_name,omitempty"`
-	Barcode     string  `json:"barcode,omitempty"`
-	Price       float64 `json:"price,omitempty"`
-	CostPrice   float64 `json:"cost_price,omitempty"`
-	CategoryName string `json:"category_name,omitempty"`
+	// Joined fields (not stored in DB)
+	ProductName  string  `json:"product_name,omitempty" gorm:"-:all"`
+	Barcode      string  `json:"barcode,omitempty" gorm:"-:all"`
+	Price        float64 `json:"price,omitempty" gorm:"-:all"`
+	CostPrice    float64 `json:"cost_price,omitempty" gorm:"-:all"`
+	CategoryName string  `json:"category_name,omitempty" gorm:"-:all"`
 }
 
 type StockMutation struct {
-	ID          uuid.UUID  `json:"id"`
-	BranchID    uuid.UUID  `json:"branch_id"`
-	ProductID   uuid.UUID  `json:"product_id"`
-	Type        string     `json:"type"` // in, out, transfer_in, transfer_out
-	Qty         float64    `json:"qty"`
-	ReferenceID *uuid.UUID `json:"reference_id,omitempty"`
-	Notes       string     `json:"notes,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
+	ID          uuid.UUID  `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	BranchID    uuid.UUID  `json:"branch_id" gorm:"type:uuid;not null;index"`
+	ProductID   uuid.UUID  `json:"product_id" gorm:"type:uuid;not null"`
+	Type        string     `json:"type" gorm:"size:20;not null"` // in, out, transfer_in, transfer_out
+	Qty         float64    `json:"qty" gorm:"not null;default:0"`
+	ReferenceID *uuid.UUID `json:"reference_id,omitempty" gorm:"type:uuid"`
+	Notes       string     `json:"notes,omitempty" gorm:"size:500;default:''"`
+	CreatedAt   time.Time  `json:"created_at" gorm:"autoCreateTime"`
 
 	// Joined fields
-	ProductName string `json:"product_name,omitempty"`
-	Barcode     string `json:"barcode,omitempty"`
+	ProductName string `json:"product_name,omitempty" gorm:"-:all"`
+	Barcode     string `json:"barcode,omitempty" gorm:"-:all"`
 }
 
 type StockAdjustmentRequest struct {
@@ -190,30 +194,30 @@ type StockAdjustmentRequest struct {
 }
 
 type StockTransferRequest struct {
-	ProductID    uuid.UUID `json:"product_id"`
-	SourceBranchID uuid.UUID `json:"source_branch_id"`
-	TargetBranchID uuid.UUID `json:"target_branch_id"`
-	Qty         float64   `json:"qty"`
-	Notes       string    `json:"notes,omitempty"`
+	ProductID       uuid.UUID `json:"product_id"`
+	SourceBranchID  uuid.UUID `json:"source_branch_id"`
+	TargetBranchID  uuid.UUID `json:"target_branch_id"`
+	Qty             float64   `json:"qty"`
+	Notes           string    `json:"notes,omitempty"`
 }
 
 // ─── Reports ───
 
 type SalesReportRow struct {
-	Date        string  `json:"date"`
-	TransactionCount int `json:"transaction_count"`
-	Subtotal    float64 `json:"subtotal"`
-	Discount    float64 `json:"discount"`
-	Total       float64 `json:"total"`
+	Date              string  `json:"date"`
+	TransactionCount int     `json:"transaction_count"`
+	Subtotal          float64 `json:"subtotal"`
+	Discount          float64 `json:"discount"`
+	Total             float64 `json:"total"`
 }
 
 type StockReportRow struct {
-	ProductID     uuid.UUID `json:"product_id"`
-	ProductName   string    `json:"product_name"`
-	Barcode       string    `json:"barcode"`
-	CategoryName  string    `json:"category_name"`
-	CurrentStock  float64   `json:"current_stock"`
-	MinStock      float64   `json:"min_stock,omitempty"`
+	ProductID     uuid.UUID  `json:"product_id"`
+	ProductName   string     `json:"product_name"`
+	Barcode       string     `json:"barcode"`
+	CategoryName  string     `json:"category_name"`
+	CurrentStock  float64    `json:"current_stock"`
+	MinStock      float64    `json:"min_stock,omitempty"`
 	LastMutation  *time.Time `json:"last_mutation,omitempty"`
 }
 
@@ -239,12 +243,12 @@ type SalesPDFRow struct {
 }
 
 type ProfitLossRow struct {
-	ProductID   uuid.UUID  `json:"product_id"`
-	ProductName string     `json:"product_name"`
-	QtySold     int        `json:"qty_sold"`
-	Revenue     float64    `json:"revenue"`
-	Cost        float64    `json:"cost"`
-	Profit      float64    `json:"profit"`
+	ProductID   uuid.UUID `json:"product_id"`
+	ProductName string    `json:"product_name"`
+	QtySold     int       `json:"qty_sold"`
+	Revenue     float64   `json:"revenue"`
+	Cost        float64   `json:"cost"`
+	Profit      float64   `json:"profit"`
 }
 
 type ProfitLossSummary struct {
@@ -258,11 +262,11 @@ type SalesReportResponse struct {
 		Start string `json:"start"`
 		End   string `json:"end"`
 	} `json:"period"`
-	Rows       []SalesReportRow `json:"rows"`
-	TotalSales float64          `json:"total_sales"`
-	TotalDiscount float64      `json:"total_discount"`
-	TotalNet   float64          `json:"total_net"`
-	TotalTransactions int       `json:"total_transactions"`
+	Rows              []SalesReportRow `json:"rows"`
+	TotalSales        float64          `json:"total_sales"`
+	TotalDiscount     float64          `json:"total_discount"`
+	TotalNet          float64          `json:"total_net"`
+	TotalTransactions int              `json:"total_transactions"`
 }
 
 type StockReportResponse struct {

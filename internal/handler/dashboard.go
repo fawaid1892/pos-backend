@@ -33,7 +33,7 @@ func (h *DashboardHandler) DashboardStats(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	stats, err := repository.GetDashboardStats(r.Context(), branchID)
+	stats, err := repository.GetDashboardStats(branchID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -68,7 +68,7 @@ func (h *DashboardHandler) SalesChart(w http.ResponseWriter, r *http.Request) {
 	// Ensure end is at end of day
 	end = end.Truncate(24 * time.Hour).Add(24 * time.Hour)
 
-	data, err := repository.GetSalesChartData(r.Context(), branchID, start, end)
+	data, err := repository.GetSalesChartData(branchID, start, end)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return

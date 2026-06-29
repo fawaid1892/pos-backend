@@ -32,7 +32,7 @@ func (h *ReportHandler) Sales(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, totalSales, totalDiscount, totalNet, totalTx, err := repository.GetSalesReport(r.Context(), branchID, start, end)
+	rows, totalSales, totalDiscount, totalNet, totalTx, err := repository.GetSalesReport(branchID, start, end)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -61,7 +61,7 @@ func (h *ReportHandler) Stock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := repository.GetStockReport(r.Context(), branchID)
+	rows, err := repository.GetStockReport(branchID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -92,7 +92,7 @@ func (h *ReportHandler) ProfitLoss(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, summary, err := repository.GetProfitLossReport(r.Context(), branchID, start, end)
+	rows, summary, err := repository.GetProfitLossReport(branchID, start, end)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -124,7 +124,7 @@ func (h *ReportHandler) SalesPDF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := repository.GetSalesPDFData(r.Context(), branchID, start, end)
+	data, err := repository.GetSalesPDFData(branchID, start, end)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return

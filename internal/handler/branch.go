@@ -17,7 +17,7 @@ func NewBranchHandler() *BranchHandler {
 }
 
 func (h *BranchHandler) List(w http.ResponseWriter, r *http.Request) {
-	branches, err := repository.ListBranches(r.Context())
+	branches, err := repository.ListBranches()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -34,7 +34,7 @@ func (h *BranchHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
-	branch, err := repository.GetBranchByID(r.Context(), id)
+	branch, err := repository.GetBranchByID(id)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -56,7 +56,7 @@ func (h *BranchHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name is required"})
 		return
 	}
-	branch, err := repository.CreateBranch(r.Context(), req)
+	branch, err := repository.CreateBranch(req)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -75,7 +75,7 @@ func (h *BranchHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
-	branch, err := repository.UpdateBranch(r.Context(), id, req)
+	branch, err := repository.UpdateBranch(id, req)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -93,7 +93,7 @@ func (h *BranchHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
-	if err := repository.SoftDeleteBranch(r.Context(), id); err != nil {
+	if err := repository.SoftDeleteBranch(id); err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 		return
 	}

@@ -37,7 +37,7 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	users, total, err := repository.ListUsers(r.Context(), repository.ListUsersParams{
+	users, total, err := repository.ListUsers(repository.ListUsersParams{
 		Page:     page,
 		Limit:    limit,
 		Role:     q.Get("role"),
@@ -66,7 +66,7 @@ func (h *UserHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
-	user, err := repository.FindUserByID(r.Context(), id)
+	user, err := repository.FindUserByID(id)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -103,7 +103,7 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := repository.CreateUser(r.Context(), req)
+	user, err := repository.CreateUser(req)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -134,7 +134,7 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := repository.UpdateUser(r.Context(), id, req)
+	user, err := repository.UpdateUser(id, req)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -159,7 +159,7 @@ func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
-	if err := repository.SoftDeleteUser(r.Context(), id); err != nil {
+	if err := repository.SoftDeleteUser(id); err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 		return
 	}

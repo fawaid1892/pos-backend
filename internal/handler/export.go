@@ -37,7 +37,7 @@ func (h *ExportHandler) SalesExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := repository.GetSalesExportData(r.Context(), branchID, start, end)
+	data, err := repository.GetSalesExportData(branchID, start, end)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return

@@ -29,7 +29,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := repository.FindUserByUsername(r.Context(), req.Username)
+	user, err := repository.FindUserByUsername(req.Username)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
@@ -53,7 +53,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	user, err := repository.FindUserByID(r.Context(), userID)
+	user, err := repository.FindUserByID(userID)
 	if err != nil || user == nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "user not found"})
 		return

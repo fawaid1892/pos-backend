@@ -20,6 +20,11 @@ func main() {
 	}
 	defer database.Close()
 
+	// ─── AutoMigrate ───
+	if err := database.Migrate(); err != nil {
+		log.Fatalf("Database migration failed: %v", err)
+	}
+
 	// ElectricSQL — shapes managed via dashboard not API
 	log.Printf("ElectricSQL URL: %s (shapes managed via dashboard)", cfg.ElectricURL)
 

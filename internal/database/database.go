@@ -1,44 +1,63 @@
 package database
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"pos-multi-branch/backend/internal/model"
+
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
-var Pool *pgxpool.Pool
+var DB *gorm.DB
 
 func Connect(databaseURL string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	cfg, err := pgxpool.ParseConfig(databaseURL)
+	var err error
+	DB, err = gorm.Open(postgres.Open(databaseURL), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Warn),
+	})
 	if err != nil {
-		return fmt.Errorf("parse config: %w", err)
+		return fmt.Errorf("open gorm connection: %w", err)
 	}
 
-	cfg.MaxConns = 20
-	cfg.MinConns = 2
-
-	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	sqlDB, err := DB.DB()
 	if err != nil {
-		return fmt.Errorf("create pool: %w", err)
+		return fmt.Errorf("get underlying sql.DB: %w", err)
 	}
 
-	if err := pool.Ping(ctx); err != nil {
-		return fmt.Errorf("ping: %w", err)
-	}
+	sqlDB.SetMaxOpenConns(25)
+	sqlDB.SetMaxIdleConns(5)
+	sqlDB.SetConnMaxLifetime(5 * time.Minute)
 
-	Pool = pool
-	log.Println("Database connected")
+	log.Println("Database connected via GORM")
+	return nil
+}
+
+func Migrate() error {
+	if err := DB.AutoMigrate(
+		&model.User{},
+		&model.Branch{},
+		&model.Category{},
+		&model.Product{},
+		&model.Transaction{},
+		&model.TransactionItem{},
+		&model.BranchProduct{},
+		&model.StockMutation{},
+	); err != nil {
+		return fmt.Errorf("auto migrate: %w", err)
+	}
+	log.Println("AutoMigrate completed")
 	return nil
 }
 
 func Close() {
-	if Pool != nil {
-		Pool.Close()
+	if DB != nil {
+		sqlDB, err := DB.DB()
+		if err == nil {
+			sqlDB.Close()
+		}
 	}
 }

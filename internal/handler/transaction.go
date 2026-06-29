@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"log"
 	"math"
@@ -15,6 +14,7 @@ import (
 	"pos-multi-branch/backend/internal/ws"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type TransactionHandler struct{}
@@ -60,7 +60,7 @@ func (h *TransactionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 
 	// ── Fetch branch config for tax_rate ──
-	branch, err := repository.GetBranchByID(r.Context(), req.BranchID)
+	branch, err := repository.GetBranchByID(req.BranchID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch branch: " + err.Error()})
 		return
@@ -79,7 +79,7 @@ func (h *TransactionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid quantity for item"})
 			return
 		}
-		product, err := repository.GetProductByID(r.Context(), ci.ProductID)
+		product, err := repository.GetProductByID(ci.ProductID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
@@ -132,49 +132,7 @@ func (h *TransactionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 		changeAmount = 0
 	}
 
-	// ── Deduct global stock (products table) ──
-	// ── Deduct branch-level stock (branch_products) ──
-	// ── Create transaction ──
-	// ── Insert items ──
-	// Bug D: Wrap all write operations in a single database transaction
-	tx, err := database.Pool.Begin(r.Context())
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to begin transaction: " + err.Error()})
-		return
-	}
-	defer tx.Rollback(r.Context())
-
-	for _, ci := range req.Items {
-		tag, err := tx.Exec(r.Context(),
-			`UPDATE products SET stock = stock - $1, updated_at = NOW()
-			 WHERE id = $2 AND deleted_at IS NULL AND stock >= $1`,
-			ci.Quantity, ci.ProductID)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
-		}
-		if tag.RowsAffected() == 0 {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "insufficient stock or product not found"})
-			return
-		}
-	}
-
-	for _, ci := range req.Items {
-		tag, err := tx.Exec(r.Context(),
-			`UPDATE branch_products SET stock_qty = stock_qty - $1, updated_at = NOW()
-			 WHERE branch_id = $2 AND product_id = $3 AND stock_qty >= $1`,
-			float64(ci.Quantity), req.BranchID, ci.ProductID)
-		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "branch stock: " + err.Error()})
-			return
-		}
-		if tag.RowsAffected() == 0 {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "insufficient stock in this branch or product not found"})
-			return
-		}
-	}
-
-	now := r.Context()
+	// ── Execute all writes in a single GORM transaction ──
 	txData := &model.Transaction{
 		BranchID:         req.BranchID,
 		UserID:           userID,
@@ -191,40 +149,57 @@ func (h *TransactionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 		PaymentReference: req.PaymentReference,
 	}
 
-	err = tx.QueryRow(now,
-		`INSERT INTO transactions (branch_id, user_id, customer_name, subtotal,
-		                           discount_percent, discount_amount, tax_rate, tax_amount, total,
-		                           cash_amount, change_amount, payment_method, payment_reference)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-		 RETURNING id, created_at`,
-		txData.BranchID, txData.UserID, txData.CustomerName,
-		txData.Subtotal, txData.DiscountPercent, txData.DiscountAmount,
-		txData.TaxRate, txData.TaxAmount,
-		txData.Total, txData.CashAmount, txData.ChangeAmount,
-		txData.PaymentMethod, txData.PaymentReference,
-	).Scan(&txData.ID, &txData.CreatedAt)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-
-	for i := range items {
-		items[i].TransactionID = txData.ID
-		err = tx.QueryRow(now,
-			`INSERT INTO transaction_items (transaction_id, product_id, product_name, quantity, price, subtotal)
-			 VALUES ($1,$2,$3,$4,$5,$6)
-			 RETURNING id`,
-			items[i].TransactionID, items[i].ProductID, items[i].ProductName,
-			items[i].Quantity, items[i].Price, items[i].Subtotal,
-		).Scan(&items[i].ID)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
+	err = database.DB.Transaction(func(tx *gorm.DB) error {
+		// Deduct global stock (products table)
+		for _, ci := range req.Items {
+			result := tx.Model(&model.Product{}).
+				Where("id = ? AND deleted_at IS NULL AND stock >= ?", ci.ProductID, ci.Quantity).
+				UpdateColumn("stock", gorm.Expr("stock - ?", ci.Quantity))
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected == 0 {
+				return errInsufficientGlobalStock
+			}
 		}
-	}
 
-	if err := tx.Commit(r.Context()); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to commit transaction: " + err.Error()})
+		// Deduct branch-level stock (branch_products)
+		for _, ci := range req.Items {
+			result := tx.Model(&model.BranchProduct{}).
+				Where("branch_id = ? AND product_id = ? AND stock_qty >= ?", req.BranchID, ci.ProductID, float64(ci.Quantity)).
+				UpdateColumn("stock_qty", gorm.Expr("stock_qty - ?", float64(ci.Quantity)))
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected == 0 {
+				return errInsufficientBranchStock
+			}
+		}
+
+		// Create transaction
+		if err := tx.Create(txData).Error; err != nil {
+			return err
+		}
+
+		// Insert items
+		for i := range items {
+			items[i].TransactionID = txData.ID
+			if err := tx.Create(&items[i]).Error; err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		switch err {
+		case errInsufficientGlobalStock:
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "insufficient stock or product not found"})
+		case errInsufficientBranchStock:
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "insufficient stock in this branch or product not found"})
+		default:
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		}
 		return
 	}
 
@@ -246,8 +221,17 @@ func (h *TransactionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, txData)
 
 	// ── Check & broadcast low stock via WebSocket ──
-	go checkAndBroadcastLowStock(r.Context(), req.BranchID)
+	go checkAndBroadcastLowStock(req.BranchID)
 }
+
+var (
+	errInsufficientGlobalStock = &txError{"insufficient global stock"}
+	errInsufficientBranchStock = &txError{"insufficient branch stock"}
+)
+
+type txError struct{ msg string }
+
+func (e *txError) Error() string { return e.msg }
 
 func (h *TransactionHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -261,7 +245,7 @@ func (h *TransactionHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	txs, err := repository.ListTransactions(r.Context(), branchID, limit, offset)
+	txs, err := repository.ListTransactions(branchID, limit, offset)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -278,7 +262,7 @@ func (h *TransactionHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
-	tx, err := repository.GetTransactionByID(r.Context(), id)
+	tx, err := repository.GetTransactionByID(id)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -294,8 +278,8 @@ func (h *TransactionHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 // checkAndBroadcastLowStock queries low-stock items for the branch and broadcasts
 // a stock.low event via WebSocket if any products are below their min_stock threshold.
-func checkAndBroadcastLowStock(ctx context.Context, branchID uuid.UUID) {
-	lowStock, err := repository.GetLowStockProductsByMinStock(ctx, branchID)
+func checkAndBroadcastLowStock(branchID uuid.UUID) {
+	lowStock, err := repository.GetLowStockProductsByMinStock(branchID)
 	if err != nil {
 		log.Printf("[stock] failed to check low stock: %v", err)
 		return
