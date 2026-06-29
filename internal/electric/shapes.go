@@ -1,6 +1,7 @@
 package electric
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
