@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -714,6 +716,47 @@ func GetSalesChartData(branchID uuid.UUID, start, end time.Time) (*model.SalesCh
 	}
 
 	return resp, nil
+}
+
+// ─── Refresh Tokens ───
+
+func GenerateRefreshTokenString() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+func CreateRefreshToken(userID uuid.UUID, token string, expiresAt time.Time) error {
+	rt := &model.RefreshToken{
+		UserID:    userID,
+		Token:     token,
+		ExpiresAt: expiresAt,
+	}
+	return database.DB.Create(rt).Error
+}
+
+func FindRefreshToken(token string) (*model.RefreshToken, error) {
+	rt := &model.RefreshToken{}
+	err := database.DB.Where("token = ? AND revoked_at IS NULL AND expires_at > NOW()", token).First(rt).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return rt, nil
+}
+
+func RevokeRefreshToken(token string) error {
+	now := time.Now()
+	return database.DB.Model(&model.RefreshToken{}).Where("token = ?", token).UpdateColumn("revoked_at", &now).Error
+}
+
+func RevokeAllUserRefreshTokens(userID uuid.UUID) error {
+	now := time.Now()
+	return database.DB.Model(&model.RefreshToken{}).Where("user_id = ? AND revoked_at IS NULL", userID).UpdateColumn("revoked_at", &now).Error
 }
 
 // ─── User Management ───

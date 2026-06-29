@@ -50,6 +50,7 @@ func Migrate() error {
 		&model.TransactionItem{},
 		&model.BranchProduct{},
 		&model.StockMutation{},
+		&model.RefreshToken{},
 	); err != nil {
 		return fmt.Errorf("auto migrate: %w", err)
 	}

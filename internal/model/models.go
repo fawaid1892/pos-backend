@@ -27,8 +27,27 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	Token string `json:"token"`
-	User  User   `json:"user"`
+	Token        string `json:"token"`
+	RefreshToken string `json:"refresh_token,omitempty"`
+	User         User   `json:"user"`
+}
+
+type RefreshToken struct {
+	ID        uuid.UUID  `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	UserID    uuid.UUID  `json:"user_id" gorm:"type:uuid;not null;index"`
+	Token     string     `json:"token" gorm:"not null;uniqueIndex"`
+	ExpiresAt time.Time  `json:"expires_at" gorm:"not null"`
+	CreatedAt time.Time  `json:"created_at" gorm:"autoCreateTime"`
+	RevokedAt *time.Time `json:"revoked_at,omitempty"`
+}
+
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
+type RefreshTokenResponse struct {
+	Token        string `json:"token"`
+	RefreshToken string `json:"refresh_token"`
 }
 
 type MeResponse struct {

@@ -52,6 +52,7 @@ func main() {
 	// ─── Public routes ───
 	mux.Handle("GET /api/v1/ws", wsHub)
 	mux.HandleFunc("POST /api/v1/auth/login", authH.Login)
+	mux.HandleFunc("POST /api/v1/auth/refresh", authH.Refresh)
 
 	// ─── Protected routes ───
 	protected := http.NewServeMux()
