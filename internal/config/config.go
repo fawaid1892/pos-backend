@@ -20,7 +20,7 @@ func Load() *Config {
 	_ = godotenv.Load()
 
 	return &Config{
-		DatabaseURL:    getEnv("DATABASE_URL", "postgres://posuser:***@localhost:5432/pos_multi_branch?sslmode=disable"),
+		DatabaseURL:    getEnv("DATABASE_URL", "postgres://localhost:5432/pos_multi_branch?sslmode=disable"),
 		SQLitePath:     getEnv("SQLITE_PATH", "./data/sync.db"),
 		JWTSecret:      getEnv("JWT_SECRET", "default-secret-change-me"),
 		JWTExpiryHours: getEnvInt("JWT_EXPIRY_HOURS", 24),

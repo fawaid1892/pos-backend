@@ -12,6 +12,5 @@ FROM alpine:3.19
 RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 COPY --from=builder /server .
-COPY .env.example .env
 EXPOSE 8080
 CMD ["./server"]
