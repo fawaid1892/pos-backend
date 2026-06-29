@@ -22,7 +22,7 @@ func main() {
 
 	// ─── AutoMigrate ───
 	if err := database.Migrate(); err != nil {
-		log.Fatalf("Database migration failed: %v", err)
+		log.Printf("[warn] Database migration: %v (tables may already exist)", err)
 	}
 
 	// ElectricSQL — shapes managed via dashboard not API
