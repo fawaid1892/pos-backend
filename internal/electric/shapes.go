@@ -143,15 +143,15 @@ func healthCheck(electricURL string) error {
 	return fmt.Errorf("health check failed after 15 retries: %w", lastErr)
 }
 
-// listShapes hits GET /v1/shape to verify the service is ready.
+// listShapes hits the shape listing endpoint.
 func listShapes(electricURL string) error {
-	url := electricURL + "/v1/shape"
+	url := electricURL + "/shape"
 	resp, err := http.Get(url)
 	if err != nil {
 		return fmt.Errorf("GET %s: %w", url, err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("GET %s returned %d: %s", url, resp.StatusCode, string(body))
 	}
@@ -161,7 +161,7 @@ func listShapes(electricURL string) error {
 // registerShape posts a single shape definition to ElectricSQL.
 // Returns "registered" on success.
 func registerShape(electricURL string, shape ShapeConfig) (string, error) {
-	url := electricURL + "/v1/shape/" + shape.Table
+	url := electricURL + "/shape/" + shape.Table
 
 	body, err := json.Marshal(shape)
 	if err != nil {

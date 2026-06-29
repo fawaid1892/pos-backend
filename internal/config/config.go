@@ -25,7 +25,7 @@ func Load() *Config {
 		JWTSecret:      getEnv("JWT_SECRET", "default-secret-change-me"),
 		JWTExpiryHours: getEnvInt("JWT_EXPIRY_HOURS", 24),
 		ServerPort:     getEnv("SERVER_PORT", "8080"),
-		ElectricURL:    getEnv("ELECTRIC_URL", "http://localhost:5133"),
+		ElectricURL:    getEnv("ELECTRIC_URL", "https://api.electric-sql.cloud/v1/sources/svc-itchy-porcupine-kbtcobz2v0/shapes"),
 	}
 }
 
