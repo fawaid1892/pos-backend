@@ -118,6 +118,18 @@ func UpdateBranch(ctx context.Context, id uuid.UUID, req model.UpdateBranchReque
 }
 
 func SoftDeleteBranch(ctx context.Context, id uuid.UUID) error {
+	// Bug E: Check if any users still reference this branch
+	var exists bool
+	err := database.Pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM users WHERE branch_id = $1 LIMIT 1)`, id,
+	).Scan(&exists)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return errors.New("cannot delete branch: there are users still assigned to this branch")
+	}
+
 	tag, err := database.Pool.Exec(ctx,
 		`UPDATE branches SET deleted_at=$1, is_active=false WHERE id=$2 AND deleted_at IS NULL`,
 		time.Now(), id)
@@ -166,10 +178,42 @@ func CreateCategory(ctx context.Context, name string) (*model.Category, error) {
 // ─── Product ───
 
 type ListProductsParams struct {
-	Query   string
-	Barcode string
-	Limit   int
-	Offset  int
+	Query      string
+	Barcode    string
+	CategoryID string
+	SortBy     string
+	SortOrder  string
+	MinStock   *int
+	Limit      int
+	Offset     int
+}
+
+func CheckBarcodeExists(ctx context.Context, barcode string) (bool, error) {
+	var id uuid.UUID
+	err := database.Pool.QueryRow(ctx,
+		`SELECT id FROM products WHERE barcode = $1 AND deleted_at IS NULL`, barcode,
+	).Scan(&id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+func CheckCategoryExists(ctx context.Context, id uuid.UUID) (bool, error) {
+	var catID uuid.UUID
+	err := database.Pool.QueryRow(ctx,
+		`SELECT id FROM categories WHERE id = $1`, id,
+	).Scan(&catID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 func ListProducts(ctx context.Context, p ListProductsParams) ([]model.Product, error) {
@@ -188,8 +232,38 @@ func ListProducts(ctx context.Context, p ListProductsParams) ([]model.Product, e
 		argIdx++
 	}
 
+	if p.CategoryID != "" {
+		where += fmt.Sprintf(" AND p.category_id = $%d", argIdx)
+		args = append(args, p.CategoryID)
+		argIdx++
+	}
+
+	if p.MinStock != nil {
+		where += fmt.Sprintf(" AND p.stock >= $%d", argIdx)
+		args = append(args, *p.MinStock)
+		argIdx++
+	}
+
 	if p.Limit <= 0 || p.Limit > 100 {
 		p.Limit = 20
+	}
+
+	// Safe sort whitelist to prevent SQL injection
+	sortWhitelist := map[string]bool{
+		"name":       true,
+		"price":      true,
+		"stock":      true,
+		"created_at": true,
+	}
+
+	orderBy := "p.name"
+	if sortWhitelist[p.SortBy] {
+		orderBy = "p." + p.SortBy
+	}
+
+	orderDir := "ASC"
+	if p.SortOrder == "desc" {
+		orderDir = "DESC"
 	}
 
 	query := fmt.Sprintf(`
@@ -199,8 +273,8 @@ func ListProducts(ctx context.Context, p ListProductsParams) ([]model.Product, e
 		FROM products p
 		LEFT JOIN categories c ON c.id = p.category_id
 		WHERE %s
-		ORDER BY p.name
-		LIMIT $%d OFFSET $%d`, where, argIdx, argIdx+1)
+		ORDER BY %s %s
+		LIMIT $%d OFFSET $%d`, where, orderBy, orderDir, argIdx, argIdx+1)
 
 	args = append(args, p.Limit, p.Offset)
 
@@ -273,6 +347,18 @@ func UpdateProduct(ctx context.Context, id uuid.UUID, req model.UpdateProductReq
 }
 
 func SoftDeleteProduct(ctx context.Context, id uuid.UUID) error {
+	// Bug E: Check if any transactions still reference this product
+	var exists bool
+	err := database.Pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM transaction_items WHERE product_id = $1 LIMIT 1)`, id,
+	).Scan(&exists)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return errors.New("cannot delete product: it has transaction history")
+	}
+
 	tag, err := database.Pool.Exec(ctx,
 		`UPDATE products SET deleted_at=$1 WHERE id=$2 AND deleted_at IS NULL`,
 		time.Now(), id)
@@ -813,4 +899,256 @@ func GetSalesPDFData(ctx context.Context, branchID uuid.UUID, start, end time.Ti
 		items = append(items, r)
 	}
 	return items, nil
+}
+
+// ─── Dashboard ───
+
+func GetDashboardStats(ctx context.Context, branchID uuid.UUID) (*model.DashboardStatsResponse, error) {
+	resp := &model.DashboardStatsResponse{}
+
+	err := database.Pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(total), 0) FROM transactions WHERE created_at >= CURRENT_DATE AND branch_id = $1`,
+		branchID,
+	).Scan(&resp.TodayRevenue)
+	if err != nil {
+		return nil, err
+	}
+
+	err = database.Pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM transactions WHERE created_at >= CURRENT_DATE AND branch_id = $1`,
+		branchID,
+	).Scan(&resp.TotalTransactions)
+	if err != nil {
+		return nil, err
+	}
+
+	err = database.Pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM branches WHERE deleted_at IS NULL AND is_active = true`,
+	).Scan(&resp.ActiveBranches)
+	if err != nil {
+		return nil, err
+	}
+
+	err = database.Pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM branch_products WHERE stock_qty > 0 AND stock_qty <= min_stock AND branch_id = $1`,
+		branchID,
+	).Scan(&resp.LowStockItems)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+func GetSalesChartData(ctx context.Context, branchID uuid.UUID, start, end time.Time) (*model.SalesChartResponse, error) {
+	resp := &model.SalesChartResponse{}
+	resp.Period.Start = start.Format("2006-01-02")
+	resp.Period.End = end.Format("2006-01-02")
+
+	rows, err := database.Pool.Query(ctx,
+		`SELECT DATE(created_at)::TEXT as day,
+		        COALESCE(SUM(total), 0) as total,
+		        COUNT(*)::INT as count
+		 FROM transactions
+		 WHERE branch_id = $1 AND created_at >= $2 AND created_at < $3
+		 GROUP BY DATE(created_at)
+		 ORDER BY day`,
+		branchID, start, end,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var r model.SalesChartRow
+		if err := rows.Scan(&r.Date, &r.Total, &r.Count); err != nil {
+			return nil, err
+		}
+		resp.Rows = append(resp.Rows, r)
+	}
+	if resp.Rows == nil {
+		resp.Rows = []model.SalesChartRow{}
+	}
+
+	return resp, nil
+}
+
+// ─── User Management ───
+
+type ListUsersParams struct {
+	Page     int
+	Limit    int
+	Role     string
+	BranchID *uuid.UUID
+}
+
+func ListUsers(ctx context.Context, p ListUsersParams) ([]model.User, int, error) {
+	where := "u.deleted_at IS NULL"
+	args := []interface{}{}
+	argIdx := 1
+
+	if p.Role != "" {
+		where += fmt.Sprintf(" AND u.role = $%d", argIdx)
+		args = append(args, p.Role)
+		argIdx++
+	}
+	if p.BranchID != nil {
+		where += fmt.Sprintf(" AND u.branch_id = $%d", argIdx)
+		args = append(args, *p.BranchID)
+		argIdx++
+	}
+
+	if p.Limit <= 0 || p.Limit > 100 {
+		p.Limit = 20
+	}
+	if p.Page <= 0 {
+		p.Page = 1
+	}
+	offset := (p.Page - 1) * p.Limit
+
+	// Count total
+	var total int
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM users u WHERE %s", where)
+	err := database.Pool.QueryRow(ctx, countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Fetch data
+	query := fmt.Sprintf(`
+		SELECT u.id, u.username, '', u.full_name, u.role, u.branch_id, u.created_at, u.updated_at
+		FROM users u
+		WHERE %s
+		ORDER BY u.full_name
+		LIMIT $%d OFFSET $%d`, where, argIdx, argIdx+1)
+
+	args = append(args, p.Limit, offset)
+
+	rows, err := database.Pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var users []model.User
+	for rows.Next() {
+		var u model.User
+		if err := rows.Scan(&u.ID, &u.Username, &u.Password, &u.FullName, &u.Role, &u.BranchID, &u.CreatedAt, &u.UpdatedAt); err != nil {
+			return nil, 0, err
+		}
+		users = append(users, u)
+	}
+	return users, total, nil
+}
+
+func CreateUser(ctx context.Context, req model.CreateUserRequest) (*model.User, error) {
+	hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, fmt.Errorf("hash password: %w", err)
+	}
+
+	u := &model.User{}
+	err = database.Pool.QueryRow(ctx,
+		`INSERT INTO users (username, password, full_name, role, branch_id)
+		 VALUES ($1,$2,$3,$4,$5)
+		 RETURNING id, username, '', full_name, role, branch_id, created_at, updated_at`,
+		req.Username, string(hashed), req.FullName, req.Role, req.BranchID,
+	).Scan(&u.ID, &u.Username, &u.Password, &u.FullName, &u.Role, &u.BranchID, &u.CreatedAt, &u.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return u, nil
+}
+
+func UpdateUser(ctx context.Context, id uuid.UUID, req model.UpdateUserRequest) (*model.User, error) {
+	// Build dynamic SET
+	setClauses := []string{}
+	args := []interface{}{}
+	argIdx := 1
+
+	if req.Username != "" {
+		setClauses = append(setClauses, fmt.Sprintf("username = $%d", argIdx))
+		args = append(args, req.Username)
+		argIdx++
+	}
+	if req.Password != "" {
+		hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			return nil, fmt.Errorf("hash password: %w", err)
+		}
+		setClauses = append(setClauses, fmt.Sprintf("password = $%d", argIdx))
+		args = append(args, string(hashed))
+		argIdx++
+	}
+	if req.FullName != "" {
+		setClauses = append(setClauses, fmt.Sprintf("full_name = $%d", argIdx))
+		args = append(args, req.FullName)
+		argIdx++
+	}
+	if req.Role != "" {
+		setClauses = append(setClauses, fmt.Sprintf("role = $%d", argIdx))
+		args = append(args, req.Role)
+		argIdx++
+	}
+	if req.BranchID != nil {
+		setClauses = append(setClauses, fmt.Sprintf("branch_id = $%d", argIdx))
+		args = append(args, *req.BranchID)
+		argIdx++
+	}
+	if req.IsActive != nil {
+		setClauses = append(setClauses, fmt.Sprintf("is_active = $%d", argIdx))
+		args = append(args, *req.IsActive)
+		argIdx++
+	}
+
+	if len(setClauses) == 0 {
+		return nil, errors.New("no fields to update")
+	}
+
+	setClauses = append(setClauses, "updated_at = NOW()")
+	args = append(args, id)
+
+	query := fmt.Sprintf(`
+		UPDATE users SET %s
+		WHERE id = $%d AND deleted_at IS NULL
+		RETURNING id, username, '', full_name, role, branch_id, created_at, updated_at`,
+		joinSetClauses(setClauses), argIdx)
+
+	u := &model.User{}
+	err := database.Pool.QueryRow(ctx, query, args...).Scan(
+		&u.ID, &u.Username, &u.Password, &u.FullName, &u.Role, &u.BranchID, &u.CreatedAt, &u.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return u, nil
+}
+
+func SoftDeleteUser(ctx context.Context, id uuid.UUID) error {
+	tag, err := database.Pool.Exec(ctx,
+		`UPDATE users SET deleted_at = $1, is_active = false, updated_at = NOW()
+		 WHERE id = $2 AND deleted_at IS NULL`,
+		time.Now(), id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return errors.New("user not found")
+	}
+	return nil
+}
+
+// joinSetClauses joins SET clause parts with commas
+func joinSetClauses(clauses []string) string {
+	result := ""
+	for i, c := range clauses {
+		if i > 0 {
+			result += ", "
+		}
+		result += c
+	}
+	return result
 }

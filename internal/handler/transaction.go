@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"pos-multi-branch/backend/internal/database"
 	"pos-multi-branch/backend/internal/middleware"
 	"pos-multi-branch/backend/internal/model"
 	"pos-multi-branch/backend/internal/repository"
@@ -132,24 +133,49 @@ func (h *TransactionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// ── Deduct global stock (products table) ──
+	// ── Deduct branch-level stock (branch_products) ──
+	// ── Create transaction ──
+	// ── Insert items ──
+	// Bug D: Wrap all write operations in a single database transaction
+	tx, err := database.Pool.Begin(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to begin transaction: " + err.Error()})
+		return
+	}
+	defer tx.Rollback(r.Context())
+
 	for _, ci := range req.Items {
-		if err := repository.DeductProductStock(r.Context(), ci.ProductID, ci.Quantity); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		tag, err := tx.Exec(r.Context(),
+			`UPDATE products SET stock = stock - $1, updated_at = NOW()
+			 WHERE id = $2 AND deleted_at IS NULL AND stock >= $1`,
+			ci.Quantity, ci.ProductID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		if tag.RowsAffected() == 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "insufficient stock or product not found"})
 			return
 		}
 	}
 
-	// ── Deduct branch-level stock (branch_products) ──
 	for _, ci := range req.Items {
-		if err := repository.DeductBranchProductStock(r.Context(), req.BranchID, ci.ProductID, float64(ci.Quantity)); err != nil {
+		tag, err := tx.Exec(r.Context(),
+			`UPDATE branch_products SET stock_qty = stock_qty - $1, updated_at = NOW()
+			 WHERE branch_id = $2 AND product_id = $3 AND stock_qty >= $1`,
+			float64(ci.Quantity), req.BranchID, ci.ProductID)
+		if err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "branch stock: " + err.Error()})
 			return
 		}
+		if tag.RowsAffected() == 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "insufficient stock in this branch or product not found"})
+			return
+		}
 	}
 
-	// ── Create transaction ──
 	now := r.Context()
-	tx := &model.Transaction{
+	txData := &model.Transaction{
 		BranchID:         req.BranchID,
 		UserID:           userID,
 		CustomerName:     req.CustomerName,
@@ -165,22 +191,59 @@ func (h *TransactionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 		PaymentReference: req.PaymentReference,
 	}
 
-	if err := repository.CreateTransaction(now, tx); err != nil {
+	err = tx.QueryRow(now,
+		`INSERT INTO transactions (branch_id, user_id, customer_name, subtotal,
+		                           discount_percent, discount_amount, tax_rate, tax_amount, total,
+		                           cash_amount, change_amount, payment_method, payment_reference)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+		 RETURNING id, created_at`,
+		txData.BranchID, txData.UserID, txData.CustomerName,
+		txData.Subtotal, txData.DiscountPercent, txData.DiscountAmount,
+		txData.TaxRate, txData.TaxAmount,
+		txData.Total, txData.CashAmount, txData.ChangeAmount,
+		txData.PaymentMethod, txData.PaymentReference,
+	).Scan(&txData.ID, &txData.CreatedAt)
+	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 
-	// ── Insert items ──
 	for i := range items {
-		items[i].TransactionID = tx.ID
-		if err := repository.InsertTransactionItem(now, &items[i]); err != nil {
+		items[i].TransactionID = txData.ID
+		err = tx.QueryRow(now,
+			`INSERT INTO transaction_items (transaction_id, product_id, product_name, quantity, price, subtotal)
+			 VALUES ($1,$2,$3,$4,$5,$6)
+			 RETURNING id`,
+			items[i].TransactionID, items[i].ProductID, items[i].ProductName,
+			items[i].Quantity, items[i].Price, items[i].Subtotal,
+		).Scan(&items[i].ID)
+		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
 		}
 	}
 
-	tx.Items = items
-	writeJSON(w, http.StatusCreated, tx)
+	if err := tx.Commit(r.Context()); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to commit transaction: " + err.Error()})
+		return
+	}
+
+	// ── Broadcast transaction.created event via WebSocket ──
+	if ws.DefaultHub != nil {
+		ws.DefaultHub.BroadcastEvent(ws.Event{
+			Type: ws.EventTransactionCreated,
+			Payload: map[string]interface{}{
+				"transaction_id": txData.ID.String(),
+				"branch_id":      txData.BranchID.String(),
+				"total":          txData.Total,
+				"items_count":    len(items),
+				"created_at":     txData.CreatedAt,
+			},
+		})
+	}
+
+	txData.Items = items
+	writeJSON(w, http.StatusCreated, txData)
 
 	// ── Check & broadcast low stock via WebSocket ──
 	go checkAndBroadcastLowStock(r.Context(), req.BranchID)

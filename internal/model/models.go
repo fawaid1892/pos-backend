@@ -12,7 +12,7 @@ type User struct {
 	Username  string    `json:"username"`
 	Password  string    `json:"-"`
 	FullName  string    `json:"full_name"`
-	Role      string    `json:"role"` // admin, kasir, owner
+	Role      string    `json:"role"` // owner, admin_cabang, kasir
 	BranchID  *uuid.UUID `json:"branch_id,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -289,6 +289,29 @@ const (
 	ExportFormatCSV  ExportFormat = "csv"
 )
 
+// ─── Dashboard ───
+
+type DashboardStatsResponse struct {
+	TodayRevenue      float64 `json:"today_revenue"`
+	TotalTransactions int     `json:"total_transactions"`
+	ActiveBranches    int     `json:"active_branches"`
+	LowStockItems     int     `json:"low_stock_items"`
+}
+
+type SalesChartRow struct {
+	Date  string  `json:"date"`
+	Total float64 `json:"total"`
+	Count int     `json:"count"`
+}
+
+type SalesChartResponse struct {
+	Period struct {
+		Start string `json:"start"`
+		End   string `json:"end"`
+	} `json:"period"`
+	Rows []SalesChartRow `json:"rows"`
+}
+
 // ─── Generic API Response ───
 
 // APIResponse is a generic JSON response wrapper.
@@ -298,4 +321,30 @@ type APIResponse struct {
 	Error   string                  `json:"error,omitempty"`
 	Data    interface{}             `json:"data,omitempty"`
 	Meta    map[string]interface{} `json:"meta,omitempty"`
+}
+
+// ─── User Management ───
+
+type CreateUserRequest struct {
+	Username string    `json:"username"`
+	Password string    `json:"password"`
+	FullName string    `json:"full_name"`
+	Role     string    `json:"role"`
+	BranchID *uuid.UUID `json:"branch_id,omitempty"`
+}
+
+type UpdateUserRequest struct {
+	Username  string     `json:"username,omitempty"`
+	Password  string     `json:"password,omitempty"`
+	FullName  string     `json:"full_name,omitempty"`
+	Role      string     `json:"role,omitempty"`
+	BranchID  *uuid.UUID `json:"branch_id,omitempty"`
+	IsActive  *bool      `json:"is_active,omitempty"`
+}
+
+type ListUsersResponse struct {
+	Users []User `json:"users"`
+	Total int    `json:"total"`
+	Page  int    `json:"page"`
+	Limit int    `json:"limit"`
 }
