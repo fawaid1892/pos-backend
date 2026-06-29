@@ -56,6 +56,7 @@ func Migrate() error {
 		&model.Role{},
 		&model.RolePermission{},
 		&model.Promotion{},
+		&model.PromotionBranch{},
 	); err != nil {
 		return fmt.Errorf("auto migrate: %w", err)
 	}

@@ -147,6 +147,9 @@ func main() {
 	protected.Handle("GET /api/v1/promotions/active", requirePerm("promotions.read")(http.HandlerFunc(promoH.Active)))
 	protected.Handle("POST /api/v1/promotions/validate-voucher", requirePerm("transactions.create")(http.HandlerFunc(promoH.ValidateVoucher)))
 
+	// Branch promotions — list active promotions for a specific branch
+	protected.Handle("GET /api/v1/branches/{id}/promotions", requirePerm("promotions.read")(http.HandlerFunc(promoH.BranchPromotions)))
+
 	// ─── Top-level dispatcher: public routes first, then auth-protected ───
 	mux.Handle("/api/v1/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Public routes — handle directly without auth

@@ -414,6 +414,13 @@ type ListUsersResponse struct {
 	Limit int    `json:"limit"`
 }
 
+// ─── PromotionBranch (join table) ───
+
+type PromotionBranch struct {
+	PromotionID uuid.UUID `json:"promotion_id" gorm:"type:uuid;primaryKey;not null"`
+	BranchID    uuid.UUID `json:"branch_id" gorm:"type:uuid;primaryKey;not null"`
+}
+
 // ─── Promotion ───
 
 type Promotion struct {
@@ -428,29 +435,36 @@ type Promotion struct {
 	QtyFree       int            `json:"qty_free" gorm:"default:0"`
 	StartDate     time.Time      `json:"start_date" gorm:"not null"`
 	EndDate       time.Time      `json:"end_date" gorm:"not null"`
-	BranchID      *uuid.UUID     `json:"branch_id,omitempty" gorm:"type:uuid;default:null"`
+	Scope         string         `json:"scope" gorm:"size:20;default:selected"` // all, province, city, selected
+	ProvinceID    string         `json:"province_id,omitempty" gorm:"size:10;default:''"` // untuk scope=province/city
+	CityID        string         `json:"city_id,omitempty" gorm:"size:10;default:''"`     // untuk scope=city
 	IsActive      bool           `json:"is_active" gorm:"default:true"`
 	MaxUses       int            `json:"max_uses" gorm:"default:0"`
 	CurrentUses   int            `json:"current_uses" gorm:"default:0"`
 	CreatedAt     time.Time      `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt     time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
 	DeletedAt     gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
+	// Relasi
+	Branches      []PromotionBranch `json:"branches,omitempty" gorm:"foreignKey:PromotionID"`
 }
 
 type CreatePromotionRequest struct {
-	Name          string     `json:"name"`
-	Type          string     `json:"type"`
-	Code          *string    `json:"code,omitempty"`
-	DiscountValue float64    `json:"discount_value"`
-	DiscountType  string     `json:"discount_type"`
-	SkuTarget     *string    `json:"sku_target,omitempty"`
-	QtyMin        int        `json:"qty_min"`
-	QtyFree       int        `json:"qty_free"`
-	StartDate     time.Time  `json:"start_date"`
-	EndDate       time.Time  `json:"end_date"`
-	BranchID      *uuid.UUID `json:"branch_id,omitempty"`
-	IsActive      *bool      `json:"is_active,omitempty"`
-	MaxUses       int        `json:"max_uses"`
+	Name          string    `json:"name"`
+	Type          string    `json:"type"`
+	Code          *string   `json:"code,omitempty"`
+	DiscountValue float64   `json:"discount_value"`
+	DiscountType  string    `json:"discount_type"`
+	SkuTarget     *string   `json:"sku_target,omitempty"`
+	QtyMin        int       `json:"qty_min"`
+	QtyFree       int       `json:"qty_free"`
+	StartDate     time.Time `json:"start_date"`
+	EndDate       time.Time `json:"end_date"`
+	Scope         string    `json:"scope"`       // all, province, city, selected
+	ProvinceID    string    `json:"province_id,omitempty"`
+	CityID        string    `json:"city_id,omitempty"`
+	BranchIDs     []string  `json:"branch_ids,omitempty"` // UUID strings untuk scope=selected
+	IsActive      *bool     `json:"is_active,omitempty"`
+	MaxUses       int       `json:"max_uses"`
 }
 
 type UpdatePromotionRequest struct {
@@ -464,7 +478,10 @@ type UpdatePromotionRequest struct {
 	QtyFree       *int       `json:"qty_free,omitempty"`
 	StartDate     *time.Time `json:"start_date,omitempty"`
 	EndDate       *time.Time `json:"end_date,omitempty"`
-	BranchID      *uuid.UUID `json:"branch_id,omitempty"`
+	Scope         *string    `json:"scope,omitempty"`
+	ProvinceID    *string    `json:"province_id,omitempty"`
+	CityID        *string    `json:"city_id,omitempty"`
+	BranchIDs     []string   `json:"branch_ids,omitempty"`
 	IsActive      *bool      `json:"is_active,omitempty"`
 	MaxUses       *int       `json:"max_uses,omitempty"`
 }

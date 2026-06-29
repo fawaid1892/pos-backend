@@ -68,6 +68,12 @@ func (h *PromotionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "start_date and end_date are required"})
 		return
 	}
+
+	// Default scope
+	if req.Scope == "" {
+		req.Scope = "selected"
+	}
+
 	promo, err := repository.CreatePromotion(req)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -131,6 +137,27 @@ func (h *PromotionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PromotionHandler) Active(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	branchIDStr := q.Get("branch_id")
+
+	if branchIDStr != "" {
+		bid, err := uuid.Parse(branchIDStr)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid branch_id"})
+			return
+		}
+		promos, err := repository.ListPromotionsByBranch(bid)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		if promos == nil {
+			promos = []model.Promotion{}
+		}
+		writeJSON(w, http.StatusOK, promos)
+		return
+	}
+
 	promos, err := repository.GetActivePromotions()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -173,4 +200,23 @@ func (h *PromotionHandler) ValidateVoucher(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// BranchPromotions returns active promotions for a specific branch.
+func (h *PromotionHandler) BranchPromotions(w http.ResponseWriter, r *http.Request) {
+	branchID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid branch id"})
+		return
+	}
+
+	promos, err := repository.ListPromotionsByBranch(branchID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if promos == nil {
+		promos = []model.Promotion{}
+	}
+	writeJSON(w, http.StatusOK, promos)
 }
