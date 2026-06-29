@@ -115,9 +115,9 @@ CREATE INDEX IF NOT EXISTS idx_branch_products_product ON branch_products (produ
 
 -- Seed Data
 INSERT INTO users (username, password, full_name, role) VALUES
-('admin', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Admin Utama', 'admin_cabang'),
-('kasir1', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Kasir Cabang 1', 'kasir'),
-('owner', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Pemilik Toko', 'owner')
+('admin', '$2a$10$NrTQTAYYBaeBAT/lrTzA1el4nTXlTUFktRnIXcqVHA6sRNMZOiima', 'Admin Utama', 'admin_cabang'),
+('kasir1', '$2a$10$NrTQTAYYBaeBAT/lrTzA1el4nTXlTUFktRnIXcqVHA6sRNMZOiima', 'Kasir Cabang 1', 'kasir'),
+('owner', '$2a$10$NrTQTAYYBaeBAT/lrTzA1el4nTXlTUFktRnIXcqVHA6sRNMZOiima', 'Pemilik Toko', 'owner')
 ON CONFLICT (username) DO NOTHING;
 
 INSERT INTO branches (name, address, phone) VALUES

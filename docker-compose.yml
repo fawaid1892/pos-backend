@@ -4,7 +4,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      DATABASE_URL: postgresql://postgres.yelouvfkrmszqhicarjh:[YOUR-PASSWORD]@aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true
+      DATABASE_URL: postgresql://postgres.yelouvfkrmszqhicarjh:Penyok1678@aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true
       JWT_SECRET: ${JWT_SECRET:-default-dev-secret}
       PORT: 8080
       ELECTRIC_URL: https://api.electric-sql.cloud
