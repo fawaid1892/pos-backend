@@ -91,6 +91,7 @@ func Seed() error {
 	// Create branches
 	branchPusat := model.Branch{
 		Name:     "Cabang Pusat",
+		Code:     "PST",
 		Address:  "Jl. Merdeka No.1, Jakarta",
 		Phone:    "021-1234567",
 		Province: "DKI Jakarta",
@@ -99,6 +100,7 @@ func Seed() error {
 	}
 	branchCibubur := model.Branch{
 		Name:     "Cabang Cibubur",
+		Code:     "CBG-01",
 		Address:  "Jl. Cibubur Raya No.5, Bekasi",
 		Phone:    "021-7654321",
 		Province: "Jawa Barat",

@@ -59,6 +59,7 @@ type MeResponse struct {
 type Branch struct {
 	ID        uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
 	Name      string         `json:"name" gorm:"not null;size:200"`
+	Code      string         `json:"code" gorm:"uniqueIndex;size:50;not null;default:''"`
 	Address   string         `json:"address" gorm:"size:500;default:''"`
 	Phone     string         `json:"phone" gorm:"size:30;default:''"`
 	Province  string         `json:"province" gorm:"size:100;not null;default:''"`
@@ -72,6 +73,7 @@ type Branch struct {
 
 type CreateBranchRequest struct {
 	Name     string `json:"name"`
+	Code     string `json:"code"`
 	Address  string `json:"address"`
 	Phone    string `json:"phone"`
 	Province string `json:"province"`
@@ -80,6 +82,7 @@ type CreateBranchRequest struct {
 
 type UpdateBranchRequest struct {
 	Name     string `json:"name"`
+	Code     string `json:"code"`
 	Address  string `json:"address"`
 	Phone    string `json:"phone"`
 	Province string `json:"province"`

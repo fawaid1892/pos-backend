@@ -68,6 +68,7 @@ func GetBranchByID(id uuid.UUID) (*model.Branch, error) {
 func CreateBranch(req model.CreateBranchRequest) (*model.Branch, error) {
 	b := &model.Branch{
 		Name:     req.Name,
+		Code:     req.Code,
 		Address:  req.Address,
 		Phone:    req.Phone,
 		Province: req.Province,
@@ -84,6 +85,7 @@ func UpdateBranch(id uuid.UUID, req model.UpdateBranchRequest) (*model.Branch, e
 	b := &model.Branch{}
 	err := database.DB.Model(b).Where("id = ? AND deleted_at IS NULL", id).Updates(map[string]interface{}{
 		"name":     req.Name,
+		"code":     req.Code,
 		"address":  req.Address,
 		"phone":    req.Phone,
 		"province": req.Province,
