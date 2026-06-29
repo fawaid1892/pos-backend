@@ -1,12 +1,12 @@
 package electric
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"sync"
+	"time"
 )
 
 // ShapeConfig defines a table shape for ElectricSQL replication.
