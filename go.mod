@@ -9,7 +9,6 @@ require (
 	github.com/jackc/pgx/v5 v5.5.5
 	github.com/joho/godotenv v1.5.1
 	github.com/jung-kurt/gofpdf v1.16.2
-	github.com/mattn/go-sqlite3 v1.14.47
 	github.com/xuri/excelize/v2 v2.9.0
 	golang.org/x/crypto v0.28.0
 )

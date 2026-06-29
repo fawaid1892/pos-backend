@@ -1,8 +1,13 @@
 -- 007_user_admin_cabang.sql
 -- POS Multi Branch — Update roles: admin -> admin_cabang, add soft delete fields
 
--- Update CHECK constraint to use admin_cabang instead of admin
+-- Drop old constraint first, then convert data, then add new constraint
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+
+-- Convert existing admin users
+UPDATE users SET role = 'admin_cabang' WHERE role = 'admin';
+
+-- Add new constraint
 ALTER TABLE users ADD CONSTRAINT users_role_check
   CHECK (role IN ('admin_cabang', 'kasir', 'owner'));
 

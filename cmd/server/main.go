@@ -6,6 +6,7 @@ import (
 
 	"pos-multi-branch/backend/internal/config"
 	"pos-multi-branch/backend/internal/database"
+	"pos-multi-branch/backend/internal/electric"
 	"pos-multi-branch/backend/internal/handler"
 	"pos-multi-branch/backend/internal/middleware"
 	"pos-multi-branch/backend/internal/ws"
@@ -14,18 +15,18 @@ import (
 func main() {
 	cfg := config.Load()
 
-	// ─── Supabase / PostgreSQL ───
+	// ─── PostgreSQL (ElectricSQL-managed via logical replication) ───
 	if err := database.Connect(cfg.DatabaseURL); err != nil {
 		log.Fatalf("Database connection failed: %v", err)
 	}
 	defer database.Close()
 
-	// ─── SQLite sync mirror (local server) ───
-	sqliteDB, err := database.NewSQLiteDB(cfg.SQLitePath)
-	if err != nil {
-		log.Fatalf("SQLite sync mirror failed: %v", err)
+	log.Printf("ElectricSQL URL: %s", cfg.ElectricURL)
+
+	// ─── ElectricSQL shapes ───
+	if err := electric.InitShapes(cfg.ElectricURL); err != nil {
+		log.Printf("[electric] failed to init shapes: %v", err)
 	}
-	defer sqliteDB.Close()
 
 	// JWT
 	middleware.InitJWT(cfg)
@@ -39,8 +40,8 @@ func main() {
 	reportH := handler.NewReportHandler()
 	exportH := handler.NewExportHandler()
 	userH := handler.NewUserHandler()
-	syncH := handler.NewSyncHandler(sqliteDB.DB)
 	dashboardH := handler.NewDashboardHandler()
+	electricH := handler.NewElectricHandler()
 
 	// WebSocket hub for realtime notifications
 	wsHub := ws.NewHub()
@@ -109,14 +110,12 @@ func main() {
 	protected.Handle("PUT /api/v1/users/{id}", adminOnly(http.HandlerFunc(userH.Update)))
 	protected.Handle("DELETE /api/v1/users/{id}", adminOnly(http.HandlerFunc(userH.Delete)))
 
-	// Sync endpoints (authenticated — branches push/pull using their own credentials)
-	protected.HandleFunc("POST /api/v1/sync/push", syncH.Push)
-	protected.HandleFunc("GET /api/v1/sync/pull", syncH.Pull)
-	protected.HandleFunc("POST /api/v1/sync/resolve", syncH.Resolve)
-
 	// Dashboard
 	protected.HandleFunc("GET /api/v1/dashboard/stats", dashboardH.DashboardStats)
 	protected.HandleFunc("GET /api/v1/dashboard/sales-chart", dashboardH.SalesChart)
+
+	// ElectricSQL shape status
+	protected.HandleFunc("GET /api/v1/electric/shapes", electricH.Shapes)
 
 	mux.Handle("/api/v1/", middleware.AuthMiddleware(protected))
 

@@ -13,17 +13,19 @@ type Config struct {
 	JWTSecret      string
 	JWTExpiryHours int
 	ServerPort     string
+	ElectricURL    string
 }
 
 func Load() *Config {
 	_ = godotenv.Load()
 
 	return &Config{
-		DatabaseURL:    getEnv("DATABASE_URL", "postgres://posuser:pospass@localhost:5432/pos_multi_branch?sslmode=disable"),
+		DatabaseURL:    getEnv("DATABASE_URL", "postgres://posuser:***@localhost:5432/pos_multi_branch?sslmode=disable"),
 		SQLitePath:     getEnv("SQLITE_PATH", "./data/sync.db"),
 		JWTSecret:      getEnv("JWT_SECRET", "default-secret-change-me"),
 		JWTExpiryHours: getEnvInt("JWT_EXPIRY_HOURS", 24),
 		ServerPort:     getEnv("SERVER_PORT", "8080"),
+		ElectricURL:    getEnv("ELECTRIC_URL", "http://localhost:5133"),
 	}
 }
 
