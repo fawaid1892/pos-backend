@@ -50,11 +50,12 @@ func main() {
 	mux := http.NewServeMux()
 
 	// ─── Public routes ───
-	mux.Handle("GET /api/v1/ws", wsHub)
-	mux.HandleFunc("POST /api/v1/auth/login", authH.Login)
-	mux.HandleFunc("POST /api/v1/auth/refresh", authH.Refresh)
+	public := http.NewServeMux()
+	public.Handle("GET /api/v1/ws", wsHub)
+	public.HandleFunc("POST /api/v1/auth/login", authH.Login)
+	public.HandleFunc("POST /api/v1/auth/refresh", authH.Refresh)
 
-	// ─── Protected routes ───
+	// ─── Protected routes (with auth middleware) ───
 	protected := http.NewServeMux()
 
 	// RBAC wrappers for role-based access control
@@ -118,7 +119,18 @@ func main() {
 	// ElectricSQL shape status
 	protected.HandleFunc("GET /api/v1/electric/shapes", electricH.Shapes)
 
-	mux.Handle("/api/v1/", middleware.AuthMiddleware(protected))
+	// ─── Top-level dispatcher: public routes first, then auth-protected ───
+	mux.Handle("/api/v1/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Public routes — handle directly without auth
+		if r.URL.Path == "/api/v1/auth/login" ||
+			r.URL.Path == "/api/v1/auth/refresh" ||
+			(r.URL.Path == "/api/v1/ws" && r.Method == "GET") {
+			public.ServeHTTP(w, r)
+			return
+		}
+		// Everything else under /api/v1/ requires auth
+		middleware.AuthMiddleware(protected).ServeHTTP(w, r)
+	}))
 
 	addr := ":" + cfg.ServerPort
 	log.Printf("Server starting on %s", addr)
