@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"pos-multi-branch/backend/internal/database"
+	"pos-multi-branch/backend/internal/idgen"
 	"pos-multi-branch/backend/internal/model"
 
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -16,7 +16,7 @@ import (
 type ListPromotionsParams struct {
 	Active   *bool
 	Expired  *bool
-	BranchID *uuid.UUID
+	BranchID *int64
 	Type     string
 	Limit    int
 	Offset   int
@@ -34,29 +34,7 @@ func ListPromotions(p ListPromotionsParams) ([]model.Promotion, error) {
 		query = query.Where("end_date < ?", now)
 	}
 	if p.BranchID != nil {
-		// A promotion applies to a branch if:
-		// scope = all, OR
-		// scope = province AND province_id matches branch's province, OR
-		// scope = city AND city_id matches branch's city, OR
-		// scope = selected AND branch is in promotion_branches
 		branchID := *p.BranchID
-
-		// Subquery: promotions whose scope = 'all'
-		// OR scope = 'province' with matching province_id (need branch's province)
-		// OR scope = 'city' with matching city_id (need branch's city)
-		// OR scope = 'selected' with join to promotion_branches
-		//
-		// To avoid complex subqueries, use a raw JOIN approach:
-		// SELECT p.* FROM promotions p
-		// WHERE p.deleted_at IS NULL
-		//   AND (
-		//     p.scope = 'all'
-		//     OR (p.scope = 'selected' AND EXISTS (
-		//       SELECT 1 FROM promotion_branches pb WHERE pb.promotion_id = p.id AND pb.branch_id = ?
-		//     ))
-		//     OR (p.scope = 'province' AND p.province_id = (SELECT province FROM branches WHERE id = ?))
-		//     OR (p.scope = 'city' AND p.city_id = (SELECT city FROM branches WHERE id = ?))
-		//   )
 		query = query.Where(
 			`(scope = 'all') OR
 			 (scope = 'selected' AND EXISTS (
@@ -79,7 +57,7 @@ func ListPromotions(p ListPromotionsParams) ([]model.Promotion, error) {
 	return promos, err
 }
 
-func GetPromotionByID(id uuid.UUID) (*model.Promotion, error) {
+func GetPromotionByID(id int64) (*model.Promotion, error) {
 	p := &model.Promotion{}
 	err := database.DB.Preload("Branches").Where("id = ? AND deleted_at IS NULL", id).First(p).Error
 	if err != nil {
@@ -119,6 +97,7 @@ func CreatePromotion(req model.CreatePromotionRequest) (*model.Promotion, error)
 		IsActive:      isActive,
 		MaxUses:       req.MaxUses,
 	}
+	p.ID = idgen.Generate()
 
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(p).Error; err != nil {
@@ -127,11 +106,7 @@ func CreatePromotion(req model.CreatePromotionRequest) (*model.Promotion, error)
 
 		// If scope=selected, create PromotionBranch entries
 		if scope == "selected" && len(req.BranchIDs) > 0 {
-			for _, bidStr := range req.BranchIDs {
-				bid, err := uuid.Parse(bidStr)
-				if err != nil {
-					return errors.New("invalid branch_id in branch_ids: " + err.Error())
-				}
+			for _, bid := range req.BranchIDs {
 				pb := model.PromotionBranch{
 					PromotionID: p.ID,
 					BranchID:    bid,
@@ -153,7 +128,7 @@ func CreatePromotion(req model.CreatePromotionRequest) (*model.Promotion, error)
 	return p, nil
 }
 
-func UpdatePromotion(id uuid.UUID, req model.UpdatePromotionRequest) (*model.Promotion, error) {
+func UpdatePromotion(id int64, req model.UpdatePromotionRequest) (*model.Promotion, error) {
 	updates := map[string]interface{}{}
 
 	if req.Name != nil {
@@ -223,11 +198,7 @@ func UpdatePromotion(id uuid.UUID, req model.UpdatePromotionRequest) (*model.Pro
 				return err
 			}
 			// Insert new branches
-			for _, bidStr := range req.BranchIDs {
-				bid, err := uuid.Parse(bidStr)
-				if err != nil {
-					return errors.New("invalid branch_id in branch_ids: " + err.Error())
-				}
+			for _, bid := range req.BranchIDs {
 				pb := model.PromotionBranch{
 					PromotionID: id,
 					BranchID:    bid,
@@ -250,7 +221,7 @@ func UpdatePromotion(id uuid.UUID, req model.UpdatePromotionRequest) (*model.Pro
 	if err != nil {
 		return nil, err
 	}
-	if p.ID == uuid.Nil {
+	if p.ID == 0 {
 		return nil, nil
 	}
 
@@ -259,7 +230,7 @@ func UpdatePromotion(id uuid.UUID, req model.UpdatePromotionRequest) (*model.Pro
 	return p, nil
 }
 
-func SoftDeletePromotion(id uuid.UUID) error {
+func SoftDeletePromotion(id int64) error {
 	result := database.DB.Where("id = ? AND deleted_at IS NULL", id).Delete(&model.Promotion{})
 	if result.Error != nil {
 		return result.Error
@@ -280,7 +251,7 @@ func GetActivePromotions() ([]model.Promotion, error) {
 }
 
 // ListPromotionsByBranch returns active promotions that apply to a specific branch.
-func ListPromotionsByBranch(branchID uuid.UUID) ([]model.Promotion, error) {
+func ListPromotionsByBranch(branchID int64) ([]model.Promotion, error) {
 	now := time.Now()
 	var promos []model.Promotion
 
@@ -304,7 +275,7 @@ func ListPromotionsByBranch(branchID uuid.UUID) ([]model.Promotion, error) {
 	return promos, err
 }
 
-func ValidateVoucher(code string, branchID *uuid.UUID, total float64) (*model.ValidateVoucherResponse, error) {
+func ValidateVoucher(code string, branchID *int64, total float64) (*model.ValidateVoucherResponse, error) {
 	now := time.Now()
 
 	var promo model.Promotion
@@ -347,7 +318,7 @@ func ValidateVoucher(code string, branchID *uuid.UUID, total float64) (*model.Va
 }
 
 // promotionAppliesToBranch checks if a promotion applies to a given branch based on scope.
-func promotionAppliesToBranch(promotionID uuid.UUID, branchID uuid.UUID) (bool, error) {
+func promotionAppliesToBranch(promotionID int64, branchID int64) (bool, error) {
 	var promo model.Promotion
 	err := database.DB.Where("id = ?", promotionID).First(&promo).Error
 	if err != nil {
@@ -383,7 +354,7 @@ func promotionAppliesToBranch(promotionID uuid.UUID, branchID uuid.UUID) (bool, 
 	}
 }
 
-func IncrementPromotionUses(id uuid.UUID) error {
+func IncrementPromotionUses(id int64) error {
 	return database.DB.Model(&model.Promotion{}).Where("id = ?", id).
 		UpdateColumn("current_uses", gorm.Expr("current_uses + 1")).Error
 }

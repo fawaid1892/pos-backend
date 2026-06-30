@@ -5,9 +5,9 @@ import (
 	"log"
 	"time"
 
+	"pos-multi-branch/backend/internal/idgen"
 	"pos-multi-branch/backend/internal/model"
 
-	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -80,7 +80,13 @@ func Seed() error {
 	DB.Exec("DELETE FROM branch_products")
 	DB.Exec("DELETE FROM products")
 	DB.Exec("DELETE FROM categories")
+	DB.Exec("DELETE FROM refresh_tokens")
+	DB.Exec("DELETE FROM role_permissions")
 	DB.Exec("DELETE FROM users")
+	DB.Exec("DELETE FROM promotions")
+	DB.Exec("DELETE FROM promotion_branches")
+	DB.Exec("DELETE FROM roles")
+	DB.Exec("DELETE FROM permissions")
 	DB.Exec("DELETE FROM branches")
 
 	// Hash the default password
@@ -90,8 +96,9 @@ func Seed() error {
 	}
 	password := string(hashed)
 
-	// Create branches
+	// Create branches (manual ID)
 	branchPusat := model.Branch{
+		ID:           idgen.Generate(),
 		Name:         "Cabang Pusat",
 		Code:         "PST",
 		Address:      "Jl. Merdeka No.1, Jakarta",
@@ -103,6 +110,7 @@ func Seed() error {
 		IsActive:     true,
 	}
 	branchCibubur := model.Branch{
+		ID:           idgen.Generate(),
 		Name:         "Cabang Cibubur",
 		Code:         "CBG-01",
 		Address:      "Jl. Cibubur Raya No.5, Bekasi",
@@ -121,8 +129,9 @@ func Seed() error {
 	}
 	log.Println("Seed: branches created")
 
-	// Create users (using branch IDs)
+	// Create users (using branch IDs from created branches)
 	admin := model.User{
+		ID:       idgen.Generate(),
 		Username: "admin",
 		Password: password,
 		FullName: "Admin Utama",
@@ -131,6 +140,7 @@ func Seed() error {
 		IsActive: true,
 	}
 	kasir1 := model.User{
+		ID:       idgen.Generate(),
 		Username: "kasir1",
 		Password: password,
 		FullName: "Kasir Cabang 1",
@@ -139,6 +149,7 @@ func Seed() error {
 		IsActive: true,
 	}
 	owner := model.User{
+		ID:       idgen.Generate(),
 		Username: "owner",
 		Password: password,
 		FullName: "Pemilik Toko",
@@ -158,10 +169,10 @@ func Seed() error {
 
 	// Create categories
 	categories := []model.Category{
-		{Name: "Makanan"},
-		{Name: "Minuman"},
-		{Name: "Snack"},
-		{Name: "Alat Tulis"},
+		{ID: idgen.Generate(), Name: "Makanan"},
+		{ID: idgen.Generate(), Name: "Minuman"},
+		{ID: idgen.Generate(), Name: "Snack"},
+		{ID: idgen.Generate(), Name: "Alat Tulis"},
 	}
 	for _, cat := range categories {
 		if err := DB.Create(&cat).Error; err != nil {
@@ -183,10 +194,10 @@ func Seed() error {
 	barcode3 := "8991001001003"
 	barcode4 := "8991001001004"
 	products := []model.Product{
-		{CategoryID: makanan.ID, Name: "Nasi Goreng", Barcode: &barcode1, Unit: "PCS", Price: 15000, Stock: 50},
-		{CategoryID: minuman.ID, Name: "Air Mineral 600ml", Barcode: &barcode2, Unit: "PCS", Price: 5000, Stock: 100},
-		{CategoryID: snack.ID, Name: "Keripik Singkong", Barcode: &barcode3, Unit: "PCS", Price: 8000, Stock: 75},
-		{CategoryID: alatTulis.ID, Name: "Pulpen Standard", Barcode: &barcode4, Unit: "PCS", Price: 3000, Stock: 200},
+		{ID: idgen.Generate(), CategoryID: makanan.ID, Name: "Nasi Goreng", Barcode: &barcode1, Unit: "PCS", Price: 15000, Stock: 50},
+		{ID: idgen.Generate(), CategoryID: minuman.ID, Name: "Air Mineral 600ml", Barcode: &barcode2, Unit: "PCS", Price: 5000, Stock: 100},
+		{ID: idgen.Generate(), CategoryID: snack.ID, Name: "Keripik Singkong", Barcode: &barcode3, Unit: "PCS", Price: 8000, Stock: 75},
+		{ID: idgen.Generate(), CategoryID: alatTulis.ID, Name: "Pulpen Standard", Barcode: &barcode4, Unit: "PCS", Price: 3000, Stock: 200},
 	}
 	for _, prod := range products {
 		if err := DB.Create(&prod).Error; err != nil {
@@ -197,44 +208,44 @@ func Seed() error {
 
 	// ─── Seed Permissions ───
 	permissions := []model.Permission{
-		{Name: "products.read", Label: "Melihat Produk", Group: "products"},
-		{Name: "products.create", Label: "Menambah Produk", Group: "products"},
-		{Name: "products.update", Label: "Mengubah Produk", Group: "products"},
-		{Name: "products.delete", Label: "Menghapus Produk", Group: "products"},
-		{Name: "categories.read", Label: "Melihat Kategori", Group: "categories"},
-		{Name: "categories.create", Label: "Menambah Kategori", Group: "categories"},
-		{Name: "branches.read", Label: "Melihat Cabang", Group: "branches"},
-		{Name: "branches.create", Label: "Menambah Cabang", Group: "branches"},
-		{Name: "branches.update", Label: "Mengubah Cabang", Group: "branches"},
-		{Name: "branches.delete", Label: "Menghapus Cabang", Group: "branches"},
-		{Name: "users.read", Label: "Melihat Pengguna", Group: "users"},
-		{Name: "users.create", Label: "Menambah Pengguna", Group: "users"},
-		{Name: "users.update", Label: "Mengubah Pengguna", Group: "users"},
-		{Name: "users.delete", Label: "Menghapus Pengguna", Group: "users"},
-		{Name: "transactions.read", Label: "Melihat Transaksi", Group: "transactions"},
-		{Name: "transactions.create", Label: "Membuat Transaksi", Group: "transactions"},
-		{Name: "stock.read", Label: "Melihat Stok", Group: "stock"},
-		{Name: "stock.adjust", Label: "Menyesuaikan Stok", Group: "stock"},
-		{Name: "stock.transfer", Label: "Transfer Stok", Group: "stock"},
-		{Name: "reports.sales", Label: "Laporan Penjualan", Group: "reports"},
-		{Name: "reports.stock", Label: "Laporan Stok", Group: "reports"},
-		{Name: "reports.profit-loss", Label: "Laporan Laba Rugi", Group: "reports"},
-		{Name: "dashboard.stats", Label: "Statistik Dashboard", Group: "dashboard"},
-		{Name: "dashboard.sales-chart", Label: "Grafik Penjualan", Group: "dashboard"},
-		{Name: "settings.read", Label: "Melihat Pengaturan", Group: "settings"},
-		{Name: "settings.update", Label: "Mengubah Pengaturan", Group: "settings"},
-		{Name: "roles.read", Label: "Melihat Role", Group: "roles"},
-		{Name: "roles.create", Label: "Menambah Role", Group: "roles"},
-		{Name: "roles.update", Label: "Mengubah Role", Group: "roles"},
-		{Name: "roles.delete", Label: "Menghapus Role", Group: "roles"},
+		{ID: idgen.Generate(), Name: "products.read", Label: "Melihat Produk", Group: "products"},
+		{ID: idgen.Generate(), Name: "products.create", Label: "Menambah Produk", Group: "products"},
+		{ID: idgen.Generate(), Name: "products.update", Label: "Mengubah Produk", Group: "products"},
+		{ID: idgen.Generate(), Name: "products.delete", Label: "Menghapus Produk", Group: "products"},
+		{ID: idgen.Generate(), Name: "categories.read", Label: "Melihat Kategori", Group: "categories"},
+		{ID: idgen.Generate(), Name: "categories.create", Label: "Menambah Kategori", Group: "categories"},
+		{ID: idgen.Generate(), Name: "branches.read", Label: "Melihat Cabang", Group: "branches"},
+		{ID: idgen.Generate(), Name: "branches.create", Label: "Menambah Cabang", Group: "branches"},
+		{ID: idgen.Generate(), Name: "branches.update", Label: "Mengubah Cabang", Group: "branches"},
+		{ID: idgen.Generate(), Name: "branches.delete", Label: "Menghapus Cabang", Group: "branches"},
+		{ID: idgen.Generate(), Name: "users.read", Label: "Melihat Pengguna", Group: "users"},
+		{ID: idgen.Generate(), Name: "users.create", Label: "Menambah Pengguna", Group: "users"},
+		{ID: idgen.Generate(), Name: "users.update", Label: "Mengubah Pengguna", Group: "users"},
+		{ID: idgen.Generate(), Name: "users.delete", Label: "Menghapus Pengguna", Group: "users"},
+		{ID: idgen.Generate(), Name: "transactions.read", Label: "Melihat Transaksi", Group: "transactions"},
+		{ID: idgen.Generate(), Name: "transactions.create", Label: "Membuat Transaksi", Group: "transactions"},
+		{ID: idgen.Generate(), Name: "stock.read", Label: "Melihat Stok", Group: "stock"},
+		{ID: idgen.Generate(), Name: "stock.adjust", Label: "Menyesuaikan Stok", Group: "stock"},
+		{ID: idgen.Generate(), Name: "stock.transfer", Label: "Transfer Stok", Group: "stock"},
+		{ID: idgen.Generate(), Name: "reports.sales", Label: "Laporan Penjualan", Group: "reports"},
+		{ID: idgen.Generate(), Name: "reports.stock", Label: "Laporan Stok", Group: "reports"},
+		{ID: idgen.Generate(), Name: "reports.profit-loss", Label: "Laporan Laba Rugi", Group: "reports"},
+		{ID: idgen.Generate(), Name: "dashboard.stats", Label: "Statistik Dashboard", Group: "dashboard"},
+		{ID: idgen.Generate(), Name: "dashboard.sales-chart", Label: "Grafik Penjualan", Group: "dashboard"},
+		{ID: idgen.Generate(), Name: "settings.read", Label: "Melihat Pengaturan", Group: "settings"},
+		{ID: idgen.Generate(), Name: "settings.update", Label: "Mengubah Pengaturan", Group: "settings"},
+		{ID: idgen.Generate(), Name: "roles.read", Label: "Melihat Role", Group: "roles"},
+		{ID: idgen.Generate(), Name: "roles.create", Label: "Menambah Role", Group: "roles"},
+		{ID: idgen.Generate(), Name: "roles.update", Label: "Mengubah Role", Group: "roles"},
+		{ID: idgen.Generate(), Name: "roles.delete", Label: "Menghapus Role", Group: "roles"},
 		// Promotions
-		{Name: "promotions.read", Label: "Melihat Promosi", Group: "promotions"},
-		{Name: "promotions.create", Label: "Menambah Promosi", Group: "promotions"},
-		{Name: "promotions.update", Label: "Mengubah Promosi", Group: "promotions"},
-		{Name: "promotions.delete", Label: "Menghapus Promosi", Group: "promotions"},
+		{ID: idgen.Generate(), Name: "promotions.read", Label: "Melihat Promosi", Group: "promotions"},
+		{ID: idgen.Generate(), Name: "promotions.create", Label: "Menambah Promosi", Group: "promotions"},
+		{ID: idgen.Generate(), Name: "promotions.update", Label: "Mengubah Promosi", Group: "promotions"},
+		{ID: idgen.Generate(), Name: "promotions.delete", Label: "Menghapus Promosi", Group: "promotions"},
 	}
 
-	permMap := make(map[string]uuid.UUID)
+	permMap := make(map[string]int64)
 	for _, p := range permissions {
 		var existing model.Permission
 		if err := DB.Where("name = ?", p.Name).First(&existing).Error; err != nil {
@@ -247,9 +258,9 @@ func Seed() error {
 	log.Println("Seed: permissions seeded")
 
 	// ─── Seed Roles ───
-	kasirRole := model.Role{Name: "kasir", Description: "Kasir — melayani transaksi", IsSystem: true}
-	adminRole := model.Role{Name: "admin_cabang", Description: "Admin cabang — mengelola operasional cabang", IsSystem: true}
-	ownerRole := model.Role{Name: "owner", Description: "Pemilik — akses penuh", IsSystem: true}
+	kasirRole := model.Role{ID: idgen.Generate(), Name: "kasir", Description: "Kasir — melayani transaksi", IsSystem: true}
+	adminRole := model.Role{ID: idgen.Generate(), Name: "admin_cabang", Description: "Admin cabang — mengelola operasional cabang", IsSystem: true}
+	ownerRole := model.Role{ID: idgen.Generate(), Name: "owner", Description: "Pemilik — akses penuh", IsSystem: true}
 
 	var existingKasir, existingAdmin, existingOwner model.Role
 	DB.Where("name = ?", "kasir").First(&existingKasir)
@@ -260,15 +271,15 @@ func Seed() error {
 	adminRoleID := existingAdmin.ID
 	ownerRoleID := existingOwner.ID
 
-	if kasirRoleID == uuid.Nil {
+	if kasirRoleID == 0 {
 		DB.Create(&kasirRole)
 		kasirRoleID = kasirRole.ID
 	}
-	if adminRoleID == uuid.Nil {
+	if adminRoleID == 0 {
 		DB.Create(&adminRole)
 		adminRoleID = adminRole.ID
 	}
-	if ownerRoleID == uuid.Nil {
+	if ownerRoleID == 0 {
 		DB.Create(&ownerRole)
 		ownerRoleID = ownerRole.ID
 	}
@@ -278,14 +289,11 @@ func Seed() error {
 	// kasir: products.read, categories.read, transactions.read, transactions.create, stock.read, stock.adjust
 	kasirPerms := []string{"products.read", "categories.read", "transactions.read", "transactions.create", "stock.read", "stock.adjust"}
 
-	// admin_cabang: ALL except roles.*
-	// owner: ALL
-
 	// Clear old permissions
 	DB.Where("role_id IN (?, ?, ?)", kasirRoleID, adminRoleID, ownerRoleID).Delete(&model.RolePermission{})
 
 	// Helper to assign perms
-	assignPerms := func(roleID uuid.UUID, permNames []string) {
+	assignPerms := func(roleID int64, permNames []string) {
 		for _, name := range permNames {
 			if pid, ok := permMap[name]; ok {
 				DB.Create(&model.RolePermission{RoleID: roleID, PermissionID: pid})

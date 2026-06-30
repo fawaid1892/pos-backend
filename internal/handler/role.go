@@ -3,11 +3,10 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"pos-multi-branch/backend/internal/model"
 	"pos-multi-branch/backend/internal/repository"
-
-	"github.com/google/uuid"
 )
 
 type RoleHandler struct{}
@@ -32,7 +31,7 @@ func (h *RoleHandler) List(w http.ResponseWriter, r *http.Request) {
 // RoleGet returns a single role by ID.
 func (h *RoleHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
-	id, err := uuid.Parse(idStr)
+	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid role ID"})
 		return
@@ -74,7 +73,7 @@ func (h *RoleHandler) Create(w http.ResponseWriter, r *http.Request) {
 // RoleUpdate updates a role's name/description.
 func (h *RoleHandler) Update(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
-	id, err := uuid.Parse(idStr)
+	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid role ID"})
 		return
@@ -106,7 +105,7 @@ func (h *RoleHandler) Update(w http.ResponseWriter, r *http.Request) {
 // RoleDelete soft-deletes a role.
 func (h *RoleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
-	id, err := uuid.Parse(idStr)
+	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid role ID"})
 		return
@@ -134,7 +133,7 @@ func (h *RoleHandler) PermissionsList(w http.ResponseWriter, r *http.Request) {
 // GetRolePermissions returns all permissions assigned to a specific role.
 func (h *RoleHandler) GetPermissions(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
-	id, err := uuid.Parse(idStr)
+	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid role ID"})
 		return
@@ -153,13 +152,13 @@ func (h *RoleHandler) GetPermissions(w http.ResponseWriter, r *http.Request) {
 // SetRolePermissions replaces all permissions assigned to a role.
 func (h *RoleHandler) SetPermissions(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
-	id, err := uuid.Parse(idStr)
+	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid role ID"})
 		return
 	}
 	var req struct {
-		PermissionIDs []uuid.UUID `json:"permission_ids"`
+		PermissionIDs []int64 `json:"permission_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})

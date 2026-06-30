@@ -2,12 +2,11 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"pos-multi-branch/backend/internal/model"
 	"pos-multi-branch/backend/internal/repository"
-
-	"github.com/google/uuid"
 )
 
 // DashboardHandler handles dashboard-related endpoints.
@@ -27,7 +26,7 @@ func (h *DashboardHandler) DashboardStats(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	branchID, err := uuid.Parse(branchIDStr)
+	branchID, err := strconv.ParseInt(branchIDStr, 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid branch_id"})
 		return
@@ -53,7 +52,7 @@ func (h *DashboardHandler) SalesChart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	branchID, err := uuid.Parse(branchIDStr)
+	branchID, err := strconv.ParseInt(branchIDStr, 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid branch_id"})
 		return

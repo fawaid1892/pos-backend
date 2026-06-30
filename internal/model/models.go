@@ -3,19 +3,18 @@ package model
 import (
 	"time"
 
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 // ─── User ───
 type User struct {
-	ID        uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	ID        int64          `json:"id" gorm:"primaryKey"`
 	Username  string         `json:"username" gorm:"uniqueIndex;not null;size:100"`
 	Password  string         `json:"-" gorm:"not null"`
 	FullName  string         `json:"full_name" gorm:"size:200;default:''"`
 	Role      string         `json:"role" gorm:"size:20;default:kasir"` // owner, admin_cabang, kasir
-	RoleID    *uuid.UUID     `json:"role_id,omitempty" gorm:"type:uuid"`
-	BranchID  *uuid.UUID     `json:"branch_id,omitempty" gorm:"type:uuid"`
+	RoleID    *int64         `json:"role_id,omitempty"`
+	BranchID  *int64         `json:"branch_id,omitempty"`
 	IsActive  bool           `json:"is_active" gorm:"default:true"`
 	CreatedAt time.Time      `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
@@ -34,8 +33,8 @@ type LoginResponse struct {
 }
 
 type RefreshToken struct {
-	ID        uuid.UUID  `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
-	UserID    uuid.UUID  `json:"user_id" gorm:"type:uuid;not null;index"`
+	ID        int64      `json:"id" gorm:"primaryKey"`
+	UserID    int64      `json:"user_id" gorm:"not null;index"`
 	Token     string     `json:"token" gorm:"not null;uniqueIndex"`
 	ExpiresAt time.Time  `json:"expires_at" gorm:"not null"`
 	CreatedAt time.Time  `json:"created_at" gorm:"autoCreateTime"`
@@ -57,7 +56,7 @@ type MeResponse struct {
 
 // ─── Branch ───
 type Branch struct {
-	ID           uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	ID           int64          `json:"id" gorm:"primaryKey"`
 	Name         string         `json:"name" gorm:"not null;size:200"`
 	Code         string         `json:"code" gorm:"uniqueIndex;size:50;not null;default:''"`
 	Address      string         `json:"address" gorm:"size:500;default:''"`
@@ -97,7 +96,7 @@ type UpdateBranchRequest struct {
 
 // ─── Category ───
 type Category struct {
-	ID        uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	ID        int64     `json:"id" gorm:"primaryKey"`
 	Name      string    `json:"name" gorm:"uniqueIndex;not null;size:100"`
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
@@ -105,8 +104,8 @@ type Category struct {
 
 // ─── Product ───
 type Product struct {
-	ID           uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
-	CategoryID   uuid.UUID      `json:"category_id" gorm:"type:uuid;not null"`
+	ID           int64          `json:"id" gorm:"primaryKey"`
+	CategoryID   int64          `json:"category_id" gorm:"not null"`
 	CategoryName string         `json:"category_name,omitempty" gorm:"-:all"` // joined field, not stored
 	Name         string         `json:"name" gorm:"not null;size:200;index"`
 	Code         *string        `json:"code" gorm:"uniqueIndex;size:100;default:null"`
@@ -121,25 +120,25 @@ type Product struct {
 }
 
 type CreateProductRequest struct {
-	CategoryID uuid.UUID `json:"category_id"`
-	Name       string    `json:"name"`
-	Code       *string   `json:"code,omitempty"`
-	Barcode    *string   `json:"barcode,omitempty"`
-	Unit       string    `json:"unit"`
-	Price      float64   `json:"price"`
-	CostPrice  float64   `json:"cost_price"`
-	Stock      int       `json:"stock"`
+	CategoryID int64   `json:"category_id"`
+	Name       string  `json:"name"`
+	Code       *string `json:"code,omitempty"`
+	Barcode    *string `json:"barcode,omitempty"`
+	Unit       string  `json:"unit"`
+	Price      float64 `json:"price"`
+	CostPrice  float64 `json:"cost_price"`
+	Stock      int     `json:"stock"`
 }
 
 type UpdateProductRequest struct {
-	CategoryID uuid.UUID `json:"category_id"`
-	Name       string    `json:"name"`
-	Code       *string   `json:"code,omitempty"`
-	Barcode    *string   `json:"barcode,omitempty"`
-	Unit       string    `json:"unit"`
-	Price      float64   `json:"price"`
-	CostPrice  float64   `json:"cost_price"`
-	Stock      int       `json:"stock"`
+	CategoryID int64   `json:"category_id"`
+	Name       string  `json:"name"`
+	Code       *string `json:"code,omitempty"`
+	Barcode    *string `json:"barcode,omitempty"`
+	Unit       string  `json:"unit"`
+	Price      float64 `json:"price"`
+	CostPrice  float64 `json:"cost_price"`
+	Stock      int     `json:"stock"`
 }
 
 type ProductSearchParams struct {
@@ -151,9 +150,9 @@ type ProductSearchParams struct {
 
 // ─── Transaction ───
 type Transaction struct {
-	ID               uuid.UUID         `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
-	BranchID         uuid.UUID         `json:"branch_id" gorm:"type:uuid;not null;index"`
-	UserID           uuid.UUID         `json:"user_id" gorm:"type:uuid;not null"`
+	ID               int64             `json:"id" gorm:"primaryKey"`
+	BranchID         int64             `json:"branch_id" gorm:"not null;index"`
+	UserID           int64             `json:"user_id" gorm:"not null"`
 	CustomerName     string            `json:"customer_name" gorm:"size:200;default:''"`
 	Subtotal         float64           `json:"subtotal" gorm:"not null;default:0"`
 	DiscountPercent  float64           `json:"discount_percent" gorm:"default:0"`
@@ -170,17 +169,17 @@ type Transaction struct {
 }
 
 type TransactionItem struct {
-	ID            uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
-	TransactionID uuid.UUID `json:"transaction_id" gorm:"type:uuid;not null;index"`
-	ProductID     uuid.UUID `json:"product_id" gorm:"type:uuid;not null"`
-	ProductName   string    `json:"product_name" gorm:"size:200;default:''"`
-	Quantity      int       `json:"quantity" gorm:"not null;default:0"`
-	Price         float64   `json:"price" gorm:"not null;default:0"`
-	Subtotal      float64   `json:"subtotal" gorm:"not null;default:0"`
+	ID            int64   `json:"id" gorm:"primaryKey"`
+	TransactionID int64   `json:"transaction_id" gorm:"not null;index"`
+	ProductID     int64   `json:"product_id" gorm:"not null"`
+	ProductName   string  `json:"product_name" gorm:"size:200;default:''"`
+	Quantity      int     `json:"quantity" gorm:"not null;default:0"`
+	Price         float64 `json:"price" gorm:"not null;default:0"`
+	Subtotal      float64 `json:"subtotal" gorm:"not null;default:0"`
 }
 
 type CheckoutRequest struct {
-	BranchID         uuid.UUID         `json:"branch_id"`
+	BranchID         int64             `json:"branch_id"`
 	CustomerName     string            `json:"customer_name"`
 	DiscountPercent  float64           `json:"discount_percent"`
 	PaymentMethod    string            `json:"payment_method"`
@@ -190,15 +189,15 @@ type CheckoutRequest struct {
 }
 
 type CheckoutItemReq struct {
-	ProductID uuid.UUID `json:"product_id"`
-	Quantity  int       `json:"quantity"`
+	ProductID int64 `json:"product_id"`
+	Quantity  int   `json:"quantity"`
 }
 
 // ─── Stock ───
 
 type BranchProduct struct {
-	BranchID  uuid.UUID `json:"branch_id" gorm:"type:uuid;primaryKey"`
-	ProductID uuid.UUID `json:"product_id" gorm:"type:uuid;primaryKey"`
+	BranchID  int64     `json:"branch_id" gorm:"primaryKey"`
+	ProductID int64     `json:"product_id" gorm:"primaryKey"`
 	StockQty  float64   `json:"stock_qty" gorm:"default:0"`
 	MinStock  float64   `json:"min_stock" gorm:"default:0"`
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
@@ -213,12 +212,12 @@ type BranchProduct struct {
 }
 
 type StockMutation struct {
-	ID          uuid.UUID  `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
-	BranchID    uuid.UUID  `json:"branch_id" gorm:"type:uuid;not null;index"`
-	ProductID   uuid.UUID  `json:"product_id" gorm:"type:uuid;not null"`
+	ID          int64      `json:"id" gorm:"primaryKey"`
+	BranchID    int64      `json:"branch_id" gorm:"not null;index"`
+	ProductID   int64      `json:"product_id" gorm:"not null"`
 	Type        string     `json:"type" gorm:"size:20;not null"` // in, out, transfer_in, transfer_out
 	Qty         float64    `json:"qty" gorm:"not null;default:0"`
-	ReferenceID *uuid.UUID `json:"reference_id,omitempty" gorm:"type:uuid"`
+	ReferenceID *int64     `json:"reference_id,omitempty"`
 	Notes       string     `json:"notes,omitempty" gorm:"size:500;default:''"`
 	CreatedAt   time.Time  `json:"created_at" gorm:"autoCreateTime"`
 
@@ -228,32 +227,32 @@ type StockMutation struct {
 }
 
 type StockAdjustmentRequest struct {
-	ProductID uuid.UUID `json:"product_id"`
-	Type      string    `json:"type"` // in, out
-	Qty       float64   `json:"qty"`
-	Notes     string    `json:"notes,omitempty"`
+	ProductID int64   `json:"product_id"`
+	Type      string  `json:"type"` // in, out
+	Qty       float64 `json:"qty"`
+	Notes     string  `json:"notes,omitempty"`
 }
 
 type StockTransferRequest struct {
-	ProductID       uuid.UUID `json:"product_id"`
-	SourceBranchID  uuid.UUID `json:"source_branch_id"`
-	TargetBranchID  uuid.UUID `json:"target_branch_id"`
-	Qty             float64   `json:"qty"`
-	Notes           string    `json:"notes,omitempty"`
+	ProductID      int64   `json:"product_id"`
+	SourceBranchID int64   `json:"source_branch_id"`
+	TargetBranchID int64   `json:"target_branch_id"`
+	Qty            float64 `json:"qty"`
+	Notes          string  `json:"notes,omitempty"`
 }
 
 // ─── Reports ───
 
 type SalesReportRow struct {
 	Date              string  `json:"date"`
-	TransactionCount int     `json:"transaction_count"`
+	TransactionCount  int     `json:"transaction_count"`
 	Subtotal          float64 `json:"subtotal"`
 	Discount          float64 `json:"discount"`
 	Total             float64 `json:"total"`
 }
 
 type StockReportRow struct {
-	ProductID     uuid.UUID  `json:"product_id"`
+	ProductID     int64      `json:"product_id"`
 	ProductName   string     `json:"product_name"`
 	Barcode       string     `json:"barcode"`
 	CategoryName  string     `json:"category_name"`
@@ -284,12 +283,12 @@ type SalesPDFRow struct {
 }
 
 type ProfitLossRow struct {
-	ProductID   uuid.UUID `json:"product_id"`
-	ProductName string    `json:"product_name"`
-	QtySold     int       `json:"qty_sold"`
-	Revenue     float64   `json:"revenue"`
-	Cost        float64   `json:"cost"`
-	Profit      float64   `json:"profit"`
+	ProductID   int64   `json:"product_id"`
+	ProductName string  `json:"product_name"`
+	QtySold     int     `json:"qty_sold"`
+	Revenue     float64 `json:"revenue"`
+	Cost        float64 `json:"cost"`
+	Profit      float64 `json:"profit"`
 }
 
 type ProfitLossSummary struct {
@@ -360,7 +359,7 @@ type SalesChartResponse struct {
 // ─── RBAC ───
 
 type Permission struct {
-	ID        uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	ID        int64     `json:"id" gorm:"primaryKey"`
 	Name      string    `json:"name" gorm:"uniqueIndex;not null;size:100"`
 	Label     string    `json:"label" gorm:"size:200;default:''"`
 	Group     string    `json:"group" gorm:"size:50;default:''"`
@@ -369,7 +368,7 @@ type Permission struct {
 }
 
 type Role struct {
-	ID          uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	ID          int64          `json:"id" gorm:"primaryKey"`
 	Name        string         `json:"name" gorm:"uniqueIndex;not null;size:50"`
 	Description string         `json:"description" gorm:"size:255;default:''"`
 	IsSystem    bool           `json:"is_system" gorm:"default:false"`
@@ -379,8 +378,8 @@ type Role struct {
 }
 
 type RolePermission struct {
-	RoleID       uuid.UUID `json:"role_id" gorm:"type:uuid;primaryKey"`
-	PermissionID uuid.UUID `json:"permission_id" gorm:"type:uuid;primaryKey"`
+	RoleID       int64 `json:"role_id" gorm:"primaryKey"`
+	PermissionID int64 `json:"permission_id" gorm:"primaryKey"`
 }
 
 // ─── Generic API Response ───
@@ -397,20 +396,20 @@ type APIResponse struct {
 // ─── User Management ───
 
 type CreateUserRequest struct {
-	Username string    `json:"username"`
-	Password string    `json:"password"`
-	FullName string    `json:"full_name"`
-	Role     string    `json:"role"`
-	BranchID *uuid.UUID `json:"branch_id,omitempty"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+	FullName string `json:"full_name"`
+	Role     string `json:"role"`
+	BranchID *int64 `json:"branch_id,omitempty"`
 }
 
 type UpdateUserRequest struct {
-	Username  string     `json:"username,omitempty"`
-	Password  string     `json:"password,omitempty"`
-	FullName  string     `json:"full_name,omitempty"`
-	Role      string     `json:"role,omitempty"`
-	BranchID  *uuid.UUID `json:"branch_id,omitempty"`
-	IsActive  *bool      `json:"is_active,omitempty"`
+	Username  string `json:"username,omitempty"`
+	Password  string `json:"password,omitempty"`
+	FullName  string `json:"full_name,omitempty"`
+	Role      string `json:"role,omitempty"`
+	BranchID  *int64 `json:"branch_id,omitempty"`
+	IsActive  *bool  `json:"is_active,omitempty"`
 }
 
 type ListUsersResponse struct {
@@ -423,14 +422,14 @@ type ListUsersResponse struct {
 // ─── PromotionBranch (join table) ───
 
 type PromotionBranch struct {
-	PromotionID uuid.UUID `json:"promotion_id" gorm:"type:uuid;primaryKey;not null"`
-	BranchID    uuid.UUID `json:"branch_id" gorm:"type:uuid;primaryKey;not null"`
+	PromotionID int64 `json:"promotion_id" gorm:"primaryKey;not null"`
+	BranchID    int64 `json:"branch_id" gorm:"primaryKey;not null"`
 }
 
 // ─── Promotion ───
 
 type Promotion struct {
-	ID            uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	ID            int64          `json:"id" gorm:"primaryKey"`
 	Name          string         `json:"name" gorm:"not null;size:200"`
 	Type          string         `json:"type" gorm:"not null;size:20"`
 	Code          *string        `json:"code,omitempty" gorm:"uniqueIndex;size:50;default:null"`
@@ -468,7 +467,7 @@ type CreatePromotionRequest struct {
 	Scope         string    `json:"scope"`       // all, province, city, selected
 	ProvinceID    string    `json:"province_id,omitempty"`
 	CityID        string    `json:"city_id,omitempty"`
-	BranchIDs     []string  `json:"branch_ids,omitempty"` // UUID strings untuk scope=selected
+	BranchIDs     []int64   `json:"branch_ids,omitempty"` // int64 IDs untuk scope=selected
 	IsActive      *bool     `json:"is_active,omitempty"`
 	MaxUses       int       `json:"max_uses"`
 }
@@ -487,7 +486,7 @@ type UpdatePromotionRequest struct {
 	Scope         *string    `json:"scope,omitempty"`
 	ProvinceID    *string    `json:"province_id,omitempty"`
 	CityID        *string    `json:"city_id,omitempty"`
-	BranchIDs     []string   `json:"branch_ids,omitempty"`
+	BranchIDs     []int64    `json:"branch_ids,omitempty"`
 	IsActive      *bool      `json:"is_active,omitempty"`
 	MaxUses       *int       `json:"max_uses,omitempty"`
 }

@@ -3,11 +3,10 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"pos-multi-branch/backend/internal/model"
 	"pos-multi-branch/backend/internal/repository"
-
-	"github.com/google/uuid"
 )
 
 type BranchHandler struct{}
@@ -29,7 +28,7 @@ func (h *BranchHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BranchHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(r.PathValue("id"))
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
@@ -65,7 +64,7 @@ func (h *BranchHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BranchHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(r.PathValue("id"))
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
@@ -88,7 +87,7 @@ func (h *BranchHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BranchHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(r.PathValue("id"))
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
@@ -103,7 +102,7 @@ func (h *BranchHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // ─── Branch User Assignment ───
 
 func (h *BranchHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(r.PathValue("id"))
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid branch id"})
 		return
@@ -120,11 +119,11 @@ func (h *BranchHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 type assignUserRequest struct {
-	UserID uuid.UUID `json:"user_id"`
+	UserID int64 `json:"user_id"`
 }
 
 func (h *BranchHandler) AssignUser(w http.ResponseWriter, r *http.Request) {
-	branchID, err := uuid.Parse(r.PathValue("id"))
+	branchID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid branch id"})
 		return
@@ -144,7 +143,7 @@ func (h *BranchHandler) AssignUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BranchHandler) RemoveUser(w http.ResponseWriter, r *http.Request) {
-	userID, err := uuid.Parse(r.PathValue("userId"))
+	userID, err := strconv.ParseInt(r.PathValue("userId"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid user id"})
 		return

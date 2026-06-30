@@ -3,11 +3,10 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"pos-multi-branch/backend/internal/model"
 	"pos-multi-branch/backend/internal/repository"
-
-	"github.com/google/uuid"
 )
 
 type PromotionHandler struct{}
@@ -25,8 +24,7 @@ func (h *PromotionHandler) List(w http.ResponseWriter, r *http.Request) {
 		params.Type = v
 	}
 	if v := q.Get("branch_id"); v != "" {
-		bid, err := uuid.Parse(v)
-		if err == nil {
+		if bid, err := strconv.ParseInt(v, 10, 64); err == nil {
 			params.BranchID = &bid
 		}
 	}
@@ -83,7 +81,7 @@ func (h *PromotionHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PromotionHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(r.PathValue("id"))
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
@@ -101,7 +99,7 @@ func (h *PromotionHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PromotionHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(r.PathValue("id"))
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
@@ -124,7 +122,7 @@ func (h *PromotionHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PromotionHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(r.PathValue("id"))
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
@@ -141,7 +139,7 @@ func (h *PromotionHandler) Active(w http.ResponseWriter, r *http.Request) {
 	branchIDStr := q.Get("branch_id")
 
 	if branchIDStr != "" {
-		bid, err := uuid.Parse(branchIDStr)
+		bid, err := strconv.ParseInt(branchIDStr, 10, 64)
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid branch_id"})
 			return
@@ -186,10 +184,9 @@ func (h *PromotionHandler) ValidateVoucher(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var branchID *uuid.UUID
+	var branchID *int64
 	if req.BranchID != "" {
-		bid, err := uuid.Parse(req.BranchID)
-		if err == nil {
+		if bid, err := strconv.ParseInt(req.BranchID, 10, 64); err == nil {
 			branchID = &bid
 		}
 	}
@@ -204,7 +201,7 @@ func (h *PromotionHandler) ValidateVoucher(w http.ResponseWriter, r *http.Reques
 
 // BranchPromotions returns active promotions for a specific branch.
 func (h *PromotionHandler) BranchPromotions(w http.ResponseWriter, r *http.Request) {
-	branchID, err := uuid.Parse(r.PathValue("id"))
+	branchID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid branch id"})
 		return

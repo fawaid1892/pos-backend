@@ -13,7 +13,6 @@ import (
 	"pos-multi-branch/backend/internal/repository"
 	"pos-multi-branch/backend/internal/ws"
 
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -30,7 +29,7 @@ func (h *TransactionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.BranchID == uuid.Nil {
+	if req.BranchID == 0 {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "branch_id is required"})
 		return
 	}
@@ -85,7 +84,7 @@ func (h *TransactionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if product == nil {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "product not found: " + ci.ProductID.String()})
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "product not found: " + strconv.FormatInt(ci.ProductID, 10)})
 			return
 		}
 
@@ -208,8 +207,8 @@ func (h *TransactionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 		ws.DefaultHub.BroadcastEvent(ws.Event{
 			Type: ws.EventTransactionCreated,
 			Payload: map[string]interface{}{
-				"transaction_id": txData.ID.String(),
-				"branch_id":      txData.BranchID.String(),
+				"transaction_id": txData.ID,
+				"branch_id":      txData.BranchID,
 				"total":          txData.Total,
 				"items_count":    len(items),
 				"created_at":     txData.CreatedAt,
@@ -238,9 +237,9 @@ func (h *TransactionHandler) List(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	offset, _ := strconv.Atoi(q.Get("offset"))
 
-	var branchID *uuid.UUID
+	var branchID *int64
 	if bidStr := q.Get("branch_id"); bidStr != "" {
-		if bid, err := uuid.Parse(bidStr); err == nil {
+		if bid, err := strconv.ParseInt(bidStr, 10, 64); err == nil {
 			branchID = &bid
 		}
 	}
@@ -257,7 +256,7 @@ func (h *TransactionHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TransactionHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(r.PathValue("id"))
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
@@ -278,7 +277,7 @@ func (h *TransactionHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 // checkAndBroadcastLowStock queries low-stock items for the branch and broadcasts
 // a stock.low event via WebSocket if any products are below their min_stock threshold.
-func checkAndBroadcastLowStock(branchID uuid.UUID) {
+func checkAndBroadcastLowStock(branchID int64) {
 	lowStock, err := repository.GetLowStockProductsByMinStock(branchID)
 	if err != nil {
 		log.Printf("[stock] failed to check low stock: %v", err)
@@ -291,11 +290,11 @@ func checkAndBroadcastLowStock(branchID uuid.UUID) {
 		ws.DefaultHub.BroadcastEvent(ws.Event{
 			Type: ws.EventStockLow,
 			Payload: map[string]interface{}{
-				"branch_id": branchID.String(),
+				"branch_id": branchID,
 				"items":     lowStock,
 			},
 		})
-		log.Printf("[stock] low stock alert broadcast for branch %s (%d items)", branchID.String(), len(lowStock))
+		log.Printf("[stock] low stock alert broadcast for branch %d (%d items)", branchID, len(lowStock))
 	}
 }
 

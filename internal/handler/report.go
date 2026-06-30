@@ -3,12 +3,12 @@ package handler
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"pos-multi-branch/backend/internal/model"
 	"pos-multi-branch/backend/internal/repository"
 
-	"github.com/google/uuid"
 	"github.com/jung-kurt/gofpdf"
 )
 
@@ -20,7 +20,7 @@ func NewReportHandler() *ReportHandler {
 
 // GET /api/v1/branches/{id}/reports/sales?start=&end=
 func (h *ReportHandler) Sales(w http.ResponseWriter, r *http.Request) {
-	branchID, err := uuid.Parse(r.PathValue("id"))
+	branchID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid branch id"})
 		return
@@ -55,7 +55,7 @@ func (h *ReportHandler) Sales(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/branches/{id}/reports/stock
 func (h *ReportHandler) Stock(w http.ResponseWriter, r *http.Request) {
-	branchID, err := uuid.Parse(r.PathValue("id"))
+	branchID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid branch id"})
 		return
@@ -80,7 +80,7 @@ func (h *ReportHandler) Stock(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/branches/{id}/reports/profit-loss?start=&end=
 func (h *ReportHandler) ProfitLoss(w http.ResponseWriter, r *http.Request) {
-	branchID, err := uuid.Parse(r.PathValue("id"))
+	branchID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid branch id"})
 		return
@@ -112,7 +112,7 @@ func (h *ReportHandler) ProfitLoss(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/branches/{id}/reports/sales.pdf?start=&end=
 func (h *ReportHandler) SalesPDF(w http.ResponseWriter, r *http.Request) {
-	branchID, err := uuid.Parse(r.PathValue("id"))
+	branchID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid branch id"})
 		return

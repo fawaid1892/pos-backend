@@ -8,8 +8,6 @@ import (
 	"pos-multi-branch/backend/internal/middleware"
 	"pos-multi-branch/backend/internal/model"
 	"pos-multi-branch/backend/internal/repository"
-
-	"github.com/google/uuid"
 )
 
 type UserHandler struct{}
@@ -30,9 +28,9 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 	page, _ := strconv.Atoi(q.Get("page"))
 	limit, _ := strconv.Atoi(q.Get("limit"))
 
-	var branchID *uuid.UUID
+	var branchID *int64
 	if bid := q.Get("branch_id"); bid != "" {
-		if parsed, err := uuid.Parse(bid); err == nil {
+		if parsed, err := strconv.ParseInt(bid, 10, 64); err == nil {
 			branchID = &parsed
 		}
 	}
@@ -61,7 +59,7 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // GetByID returns a single user
 func (h *UserHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(r.PathValue("id"))
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
@@ -119,7 +117,7 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := uuid.Parse(r.PathValue("id"))
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
@@ -154,7 +152,7 @@ func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := uuid.Parse(r.PathValue("id"))
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return

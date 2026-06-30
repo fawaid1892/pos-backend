@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"pos-multi-branch/backend/internal/database"
+	"pos-multi-branch/backend/internal/idgen"
 	"pos-multi-branch/backend/internal/model"
 
-	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -29,7 +29,7 @@ func FindUserByUsername(username string) (*model.User, error) {
 	return u, nil
 }
 
-func FindUserByID(id uuid.UUID) (*model.User, error) {
+func FindUserByID(id int64) (*model.User, error) {
 	u := &model.User{}
 	err := database.DB.Where("id = ?", id).First(u).Error
 	if err != nil {
@@ -53,7 +53,7 @@ func ListBranches() ([]model.Branch, error) {
 	return branches, err
 }
 
-func GetBranchByID(id uuid.UUID) (*model.Branch, error) {
+func GetBranchByID(id int64) (*model.Branch, error) {
 	b := &model.Branch{}
 	err := database.DB.Where("id = ? AND deleted_at IS NULL", id).First(b).Error
 	if err != nil {
@@ -76,6 +76,7 @@ func CreateBranch(req model.CreateBranchRequest) (*model.Branch, error) {
 		City:         req.City,
 		CityCode:     req.CityCode,
 	}
+	b.ID = idgen.Generate()
 	err := database.DB.Create(b).Error
 	if err != nil {
 		return nil, err
@@ -83,7 +84,7 @@ func CreateBranch(req model.CreateBranchRequest) (*model.Branch, error) {
 	return b, nil
 }
 
-func UpdateBranch(id uuid.UUID, req model.UpdateBranchRequest) (*model.Branch, error) {
+func UpdateBranch(id int64, req model.UpdateBranchRequest) (*model.Branch, error) {
 	b := &model.Branch{}
 	err := database.DB.Model(b).Where("id = ? AND deleted_at IS NULL", id).Updates(map[string]interface{}{
 		"name":          req.Name,
@@ -104,7 +105,7 @@ func UpdateBranch(id uuid.UUID, req model.UpdateBranchRequest) (*model.Branch, e
 	return b, nil
 }
 
-func SoftDeleteBranch(id uuid.UUID) error {
+func SoftDeleteBranch(id int64) error {
 	// Check if any users still reference this branch
 	var count int64
 	err := database.DB.Model(&model.User{}).Where("branch_id = ?", id).Limit(1).Count(&count).Error
@@ -127,13 +128,13 @@ func SoftDeleteBranch(id uuid.UUID) error {
 
 // ─── Branch User Assignment ───
 
-func ListUsersByBranch(branchID uuid.UUID) ([]model.User, error) {
+func ListUsersByBranch(branchID int64) ([]model.User, error) {
 	var users []model.User
 	err := database.DB.Where("branch_id = ? AND deleted_at IS NULL", branchID).Find(&users).Error
 	return users, err
 }
 
-func AssignUserToBranch(userID uuid.UUID, branchID *uuid.UUID) error {
+func AssignUserToBranch(userID int64, branchID *int64) error {
 	return database.DB.Model(&model.User{}).Where("id = ?", userID).UpdateColumn("branch_id", branchID).Error
 }
 
@@ -147,6 +148,7 @@ func ListCategories() ([]model.Category, error) {
 
 func CreateCategory(name string) (*model.Category, error) {
 	c := &model.Category{Name: name}
+	c.ID = idgen.Generate()
 	err := database.DB.Create(c).Error
 	if err != nil {
 		return nil, err
@@ -176,7 +178,7 @@ func CheckBarcodeExists(barcode string) (bool, error) {
 	return count > 0, err
 }
 
-func CheckCategoryExists(id uuid.UUID) (bool, error) {
+func CheckCategoryExists(id int64) (bool, error) {
 	var count int64
 	err := database.DB.Model(&model.Category{}).Where("id = ?", id).Limit(1).Count(&count).Error
 	return count > 0, err
@@ -228,7 +230,7 @@ func ListProducts(p ListProductsParams) ([]model.Product, error) {
 	return products, err
 }
 
-func GetProductByID(id uuid.UUID) (*model.Product, error) {
+func GetProductByID(id int64) (*model.Product, error) {
 	p := &model.Product{}
 	err := database.DB.Table("products p").
 		Select(`p.id, p.category_id, COALESCE(c.name,'') as category_name,
@@ -261,6 +263,7 @@ func CreateProduct(req model.CreateProductRequest) (*model.Product, error) {
 		CostPrice:  req.CostPrice,
 		Stock:      req.Stock,
 	}
+	p.ID = idgen.Generate()
 	err := database.DB.Create(p).Error
 	if err != nil {
 		return nil, err
@@ -268,7 +271,7 @@ func CreateProduct(req model.CreateProductRequest) (*model.Product, error) {
 	return p, nil
 }
 
-func UpdateProduct(id uuid.UUID, req model.UpdateProductRequest) (*model.Product, error) {
+func UpdateProduct(id int64, req model.UpdateProductRequest) (*model.Product, error) {
 	p := &model.Product{}
 	err := database.DB.Model(p).Where("id = ? AND deleted_at IS NULL", id).Updates(map[string]interface{}{
 		"category_id": req.CategoryID,
@@ -289,7 +292,7 @@ func UpdateProduct(id uuid.UUID, req model.UpdateProductRequest) (*model.Product
 	return p, nil
 }
 
-func SoftDeleteProduct(id uuid.UUID) error {
+func SoftDeleteProduct(id int64) error {
 	// Check if any transactions still reference this product
 	var count int64
 	err := database.DB.Model(&model.TransactionItem{}).Where("product_id = ?", id).Limit(1).Count(&count).Error
@@ -320,7 +323,7 @@ func InsertTransactionItem(item *model.TransactionItem) error {
 	return database.DB.Create(item).Error
 }
 
-func DeductProductStock(productID uuid.UUID, qty int) error {
+func DeductProductStock(productID int64, qty int) error {
 	result := database.DB.Model(&model.Product{}).
 		Where("id = ? AND deleted_at IS NULL AND stock >= ?", productID, qty).
 		UpdateColumn("stock", gorm.Expr("stock - ?", qty))
@@ -333,7 +336,7 @@ func DeductProductStock(productID uuid.UUID, qty int) error {
 	return nil
 }
 
-func DeductBranchProductStock(branchID, productID uuid.UUID, qty float64) error {
+func DeductBranchProductStock(branchID, productID int64, qty float64) error {
 	result := database.DB.Model(&model.BranchProduct{}).
 		Where("branch_id = ? AND product_id = ? AND stock_qty >= ?", branchID, productID, qty).
 		UpdateColumn("stock_qty", gorm.Expr("stock_qty - ?", qty))
@@ -346,7 +349,7 @@ func DeductBranchProductStock(branchID, productID uuid.UUID, qty float64) error 
 	return nil
 }
 
-func ListTransactions(branchID *uuid.UUID, limit, offset int) ([]model.Transaction, error) {
+func ListTransactions(branchID *int64, limit, offset int) ([]model.Transaction, error) {
 	query := database.DB.Model(&model.Transaction{})
 	if branchID != nil {
 		query = query.Where("branch_id = ?", *branchID)
@@ -360,7 +363,7 @@ func ListTransactions(branchID *uuid.UUID, limit, offset int) ([]model.Transacti
 	return txs, err
 }
 
-func GetTransactionByID(id uuid.UUID) (*model.Transaction, error) {
+func GetTransactionByID(id int64) (*model.Transaction, error) {
 	tx := &model.Transaction{}
 	err := database.DB.Preload("Items").Where("id = ?", id).First(tx).Error
 	if err != nil {
@@ -374,7 +377,7 @@ func GetTransactionByID(id uuid.UUID) (*model.Transaction, error) {
 
 // ─── Branch Products ───
 
-func UpsertBranchProduct(branchID, productID uuid.UUID, qty float64) error {
+func UpsertBranchProduct(branchID, productID int64, qty float64) error {
 	return database.DB.Exec(
 		`INSERT INTO branch_products (branch_id, product_id, stock_qty)
 		 VALUES (?, ?, ?)
@@ -384,7 +387,7 @@ func UpsertBranchProduct(branchID, productID uuid.UUID, qty float64) error {
 	).Error
 }
 
-func SetBranchProductStock(branchID, productID uuid.UUID, qty float64) error {
+func SetBranchProductStock(branchID, productID int64, qty float64) error {
 	return database.DB.Exec(
 		`INSERT INTO branch_products (branch_id, product_id, stock_qty)
 		 VALUES (?, ?, ?)
@@ -394,7 +397,7 @@ func SetBranchProductStock(branchID, productID uuid.UUID, qty float64) error {
 	).Error
 }
 
-func GetBranchProduct(branchID, productID uuid.UUID) (*model.BranchProduct, error) {
+func GetBranchProduct(branchID, productID int64) (*model.BranchProduct, error) {
 	bp := &model.BranchProduct{}
 	err := database.DB.Table("branch_products bp").
 		Select(`bp.branch_id, bp.product_id, bp.stock_qty, bp.created_at, bp.updated_at,
@@ -412,7 +415,7 @@ func GetBranchProduct(branchID, productID uuid.UUID) (*model.BranchProduct, erro
 	return bp, nil
 }
 
-func ListBranchProducts(branchID uuid.UUID) ([]model.BranchProduct, error) {
+func ListBranchProducts(branchID int64) ([]model.BranchProduct, error) {
 	var items []model.BranchProduct
 	err := database.DB.Table("branch_products bp").
 		Select(`bp.branch_id, bp.product_id, bp.stock_qty, bp.created_at, bp.updated_at,
@@ -428,10 +431,11 @@ func ListBranchProducts(branchID uuid.UUID) ([]model.BranchProduct, error) {
 // ─── Stock Mutations ───
 
 func InsertStockMutation(m *model.StockMutation) error {
+	m.ID = idgen.Generate()
 	return database.DB.Create(m).Error
 }
 
-func ListStockMutations(branchID uuid.UUID, limit, offset int) ([]model.StockMutation, error) {
+func ListStockMutations(branchID int64, limit, offset int) ([]model.StockMutation, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
@@ -450,7 +454,7 @@ func ListStockMutations(branchID uuid.UUID, limit, offset int) ([]model.StockMut
 
 // ─── Stock Transfer (atomic with DB txn) ───
 
-func TransferStock(sourceBranchID, targetBranchID, productID uuid.UUID, qty float64, notes string) error {
+func TransferStock(sourceBranchID, targetBranchID, productID int64, qty float64, notes string) error {
 	tx := database.DB.Begin()
 	if tx.Error != nil {
 		return fmt.Errorf("begin tx: %w", tx.Error)
@@ -505,7 +509,7 @@ func TransferStock(sourceBranchID, targetBranchID, productID uuid.UUID, qty floa
 
 // ─── Reports ───
 
-func GetSalesReport(branchID uuid.UUID, start, end time.Time) ([]model.SalesReportRow, float64, float64, float64, int, error) {
+func GetSalesReport(branchID int64, start, end time.Time) ([]model.SalesReportRow, float64, float64, float64, int, error) {
 	type salesRow struct {
 		Day       string
 		TxCount   int
@@ -547,7 +551,7 @@ func GetSalesReport(branchID uuid.UUID, start, end time.Time) ([]model.SalesRepo
 	return report, totalSales, totalDiscount, totalNet, totalTx, nil
 }
 
-func GetStockReport(branchID uuid.UUID) ([]model.StockReportRow, error) {
+func GetStockReport(branchID int64) ([]model.StockReportRow, error) {
 	var items []model.StockReportRow
 	err := database.DB.Table("branch_products bp").
 		Select(`bp.product_id, p.name, p.barcode,
@@ -562,9 +566,9 @@ func GetStockReport(branchID uuid.UUID) ([]model.StockReportRow, error) {
 	return items, err
 }
 
-func GetProfitLossReport(branchID uuid.UUID, start, end time.Time) ([]model.ProfitLossRow, model.ProfitLossSummary, error) {
+func GetProfitLossReport(branchID int64, start, end time.Time) ([]model.ProfitLossRow, model.ProfitLossSummary, error) {
 	type profitRow struct {
-		ProductID   uuid.UUID
+		ProductID   int64
 		Name        string
 		QtySold     int
 		Revenue     float64
@@ -620,7 +624,7 @@ type SalesExportRow struct {
 	Change       float64 `json:"change"`
 }
 
-func GetSalesExportData(branchID uuid.UUID, start, end time.Time) ([]SalesExportRow, error) {
+func GetSalesExportData(branchID int64, start, end time.Time) ([]SalesExportRow, error) {
 	var data []SalesExportRow
 	err := database.DB.Table("transactions t").
 		Select(`t.created_at::TEXT, t.customer_name,
@@ -635,7 +639,7 @@ func GetSalesExportData(branchID uuid.UUID, start, end time.Time) ([]SalesExport
 
 // ─── Low Stock ───
 
-func GetLowStockProducts(branchID uuid.UUID, threshold float64) ([]model.LowStockItem, error) {
+func GetLowStockProducts(branchID int64, threshold float64) ([]model.LowStockItem, error) {
 	var items []model.LowStockItem
 	err := database.DB.Table("branch_products bp").
 		Select("p.name, b.name, bp.stock_qty, COALESCE(bp.min_stock, 0)").
@@ -647,7 +651,7 @@ func GetLowStockProducts(branchID uuid.UUID, threshold float64) ([]model.LowStoc
 	return items, err
 }
 
-func GetLowStockProductsByMinStock(branchID uuid.UUID) ([]model.LowStockItem, error) {
+func GetLowStockProductsByMinStock(branchID int64) ([]model.LowStockItem, error) {
 	var items []model.LowStockItem
 	err := database.DB.Table("branch_products bp").
 		Select("p.name, b.name, bp.stock_qty, COALESCE(bp.min_stock, 0)").
@@ -661,7 +665,7 @@ func GetLowStockProductsByMinStock(branchID uuid.UUID) ([]model.LowStockItem, er
 
 // ─── PDF Sales Data ───
 
-func GetSalesPDFData(branchID uuid.UUID, start, end time.Time) ([]model.SalesPDFRow, error) {
+func GetSalesPDFData(branchID int64, start, end time.Time) ([]model.SalesPDFRow, error) {
 	var items []model.SalesPDFRow
 	err := database.DB.Table("transactions t").
 		Select(`t.created_at::TEXT as date,
@@ -676,7 +680,7 @@ func GetSalesPDFData(branchID uuid.UUID, start, end time.Time) ([]model.SalesPDF
 
 // ─── Dashboard ───
 
-func GetDashboardStats(branchID uuid.UUID) (*model.DashboardStatsResponse, error) {
+func GetDashboardStats(branchID int64) (*model.DashboardStatsResponse, error) {
 	resp := &model.DashboardStatsResponse{}
 
 	err := database.DB.Table("transactions").
@@ -714,7 +718,7 @@ func GetDashboardStats(branchID uuid.UUID) (*model.DashboardStatsResponse, error
 	return resp, nil
 }
 
-func GetSalesChartData(branchID uuid.UUID, start, end time.Time) (*model.SalesChartResponse, error) {
+func GetSalesChartData(branchID int64, start, end time.Time) (*model.SalesChartResponse, error) {
 	resp := &model.SalesChartResponse{}
 	resp.Period.Start = start.Format("2006-01-02")
 	resp.Period.End = end.Format("2006-01-02")
@@ -761,12 +765,13 @@ func GenerateRefreshTokenString() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-func CreateRefreshToken(userID uuid.UUID, token string, expiresAt time.Time) error {
+func CreateRefreshToken(userID int64, token string, expiresAt time.Time) error {
 	rt := &model.RefreshToken{
 		UserID:    userID,
 		Token:     token,
 		ExpiresAt: expiresAt,
 	}
+	rt.ID = idgen.Generate()
 	return database.DB.Create(rt).Error
 }
 
@@ -787,7 +792,7 @@ func RevokeRefreshToken(token string) error {
 	return database.DB.Model(&model.RefreshToken{}).Where("token = ?", token).UpdateColumn("revoked_at", &now).Error
 }
 
-func RevokeAllUserRefreshTokens(userID uuid.UUID) error {
+func RevokeAllUserRefreshTokens(userID int64) error {
 	now := time.Now()
 	return database.DB.Model(&model.RefreshToken{}).Where("user_id = ? AND revoked_at IS NULL", userID).UpdateColumn("revoked_at", &now).Error
 }
@@ -798,7 +803,7 @@ type ListUsersParams struct {
 	Page     int
 	Limit    int
 	Role     string
-	BranchID *uuid.UUID
+	BranchID *int64
 }
 
 func ListUsers(p ListUsersParams) ([]model.User, int, error) {
@@ -843,6 +848,7 @@ func CreateUser(req model.CreateUserRequest) (*model.User, error) {
 		Role:     req.Role,
 		BranchID: req.BranchID,
 	}
+	u.ID = idgen.Generate()
 	err = database.DB.Create(u).Error
 	if err != nil {
 		return nil, err
@@ -850,7 +856,7 @@ func CreateUser(req model.CreateUserRequest) (*model.User, error) {
 	return u, nil
 }
 
-func UpdateUser(id uuid.UUID, req model.UpdateUserRequest) (*model.User, error) {
+func UpdateUser(id int64, req model.UpdateUserRequest) (*model.User, error) {
 	updates := map[string]interface{}{}
 
 	if req.Username != "" {
@@ -891,7 +897,7 @@ func UpdateUser(id uuid.UUID, req model.UpdateUserRequest) (*model.User, error) 
 	return u, nil
 }
 
-func SoftDeleteUser(id uuid.UUID) error {
+func SoftDeleteUser(id int64) error {
 	result := database.DB.Where("id = ? AND deleted_at IS NULL", id).Delete(&model.User{})
 	if result.Error != nil {
 		return result.Error
@@ -904,7 +910,7 @@ func SoftDeleteUser(id uuid.UUID) error {
 
 // ─── RBAC ───
 
-func RoleHasPermission(roleID uuid.UUID, permissionName string) (bool, error) {
+func RoleHasPermission(roleID int64, permissionName string) (bool, error) {
 	var count int64
 	err := database.DB.Table("role_permissions rp").
 		Joins("JOIN permissions p ON p.id = rp.permission_id").
@@ -920,7 +926,7 @@ func ListRoles() ([]model.Role, error) {
 	return roles, err
 }
 
-func GetRoleByID(id uuid.UUID) (*model.Role, error) {
+func GetRoleByID(id int64) (*model.Role, error) {
 	var role model.Role
 	err := database.DB.Where("id = ? AND deleted_at IS NULL", id).First(&role).Error
 	if err != nil {
@@ -938,7 +944,7 @@ func ListPermissions() ([]model.Permission, error) {
 	return perms, err
 }
 
-func GetRolePermissions(roleID uuid.UUID) ([]model.Permission, error) {
+func GetRolePermissions(roleID int64) ([]model.Permission, error) {
 	var perms []model.Permission
 	err := database.DB.Table("permissions p").
 		Joins("JOIN role_permissions rp ON rp.permission_id = p.id").
@@ -948,7 +954,7 @@ func GetRolePermissions(roleID uuid.UUID) ([]model.Permission, error) {
 	return perms, err
 }
 
-func SetRolePermissions(roleID uuid.UUID, permissionIDs []uuid.UUID) error {
+func SetRolePermissions(roleID int64, permissionIDs []int64) error {
 	tx := database.DB.Begin()
 	if tx.Error != nil {
 		return tx.Error
@@ -976,6 +982,7 @@ func CreateRole(name, description string) (*model.Role, error) {
 		Description: description,
 		IsSystem:    false,
 	}
+	role.ID = idgen.Generate()
 	err := database.DB.Create(role).Error
 	if err != nil {
 		return nil, err
@@ -983,7 +990,7 @@ func CreateRole(name, description string) (*model.Role, error) {
 	return role, nil
 }
 
-func UpdateRole(id uuid.UUID, name, description string) (*model.Role, error) {
+func UpdateRole(id int64, name, description string) (*model.Role, error) {
 	role := &model.Role{}
 	err := database.DB.Model(role).Where("id = ? AND deleted_at IS NULL", id).Updates(map[string]interface{}{
 		"name":        name,
@@ -998,7 +1005,7 @@ func UpdateRole(id uuid.UUID, name, description string) (*model.Role, error) {
 	return role, nil
 }
 
-func SoftDeleteRole(id uuid.UUID) error {
+func SoftDeleteRole(id int64) error {
 	// Check if any users reference this role
 	var count int64
 	err := database.DB.Model(&model.User{}).Where("role_id = ?", id).Limit(1).Count(&count).Error

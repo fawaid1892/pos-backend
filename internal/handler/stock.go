@@ -5,11 +5,10 @@ import (
 	"net/http"
 	"strconv"
 
+	"pos-multi-branch/backend/internal/middleware"
 	"pos-multi-branch/backend/internal/model"
 	"pos-multi-branch/backend/internal/repository"
 	"pos-multi-branch/backend/internal/ws"
-
-	"github.com/google/uuid"
 )
 
 type StockHandler struct{}
@@ -20,7 +19,7 @@ func NewStockHandler() *StockHandler {
 
 // POST /api/v1/branches/{id}/inventory/adjustment
 func (h *StockHandler) Adjustment(w http.ResponseWriter, r *http.Request) {
-	branchID, err := uuid.Parse(r.PathValue("id"))
+	branchID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid branch id"})
 		return
@@ -31,7 +30,7 @@ func (h *StockHandler) Adjustment(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
-	if req.ProductID == uuid.Nil {
+	if req.ProductID == 0 {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "product_id is required"})
 		return
 	}
@@ -94,7 +93,7 @@ func (h *StockHandler) Adjustment(w http.ResponseWriter, r *http.Request) {
 		ws.DefaultHub.BroadcastEventToBranch(int64(0), ws.Event{
 			Type: ws.EventStockAdjusted,
 			Payload: map[string]interface{}{
-				"product_id": req.ProductID.String(),
+				"product_id": req.ProductID,
 				"type":       req.Type,
 				"qty":        req.Qty,
 			},
@@ -112,7 +111,7 @@ func (h *StockHandler) Transfer(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
-	if req.SourceBranchID == uuid.Nil || req.TargetBranchID == uuid.Nil || req.ProductID == uuid.Nil {
+	if req.SourceBranchID == 0 || req.TargetBranchID == 0 || req.ProductID == 0 {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "source_branch_id, target_branch_id, and product_id are required"})
 		return
 	}
@@ -137,9 +136,9 @@ func (h *StockHandler) Transfer(w http.ResponseWriter, r *http.Request) {
 		ws.DefaultHub.BroadcastEvent(ws.Event{
 			Type: ws.EventStockTransferred,
 			Payload: map[string]interface{}{
-				"product_id":       req.ProductID.String(),
-				"source_branch_id": req.SourceBranchID.String(),
-				"target_branch_id": req.TargetBranchID.String(),
+				"product_id":       req.ProductID,
+				"source_branch_id": req.SourceBranchID,
+				"target_branch_id": req.TargetBranchID,
 				"qty":              req.Qty,
 			},
 		})
@@ -148,7 +147,7 @@ func (h *StockHandler) Transfer(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/branches/{id}/inventory
 func (h *StockHandler) ListInventory(w http.ResponseWriter, r *http.Request) {
-	branchID, err := uuid.Parse(r.PathValue("id"))
+	branchID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid branch id"})
 		return
@@ -182,7 +181,7 @@ func (h *StockHandler) ListInventory(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/branches/{id}/inventory/low-stock?threshold=5
 func (h *StockHandler) LowStock(w http.ResponseWriter, r *http.Request) {
-	branchID, err := uuid.Parse(r.PathValue("id"))
+	branchID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid branch id"})
 		return

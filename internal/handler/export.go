@@ -3,12 +3,12 @@ package handler
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"pos-multi-branch/backend/internal/repository"
 
-	"github.com/google/uuid"
 	"github.com/xuri/excelize/v2"
 )
 
@@ -20,7 +20,7 @@ func NewExportHandler() *ExportHandler {
 
 // GET /api/v1/branches/{id}/reports/sales/export?format=pdf|xlsx
 func (h *ExportHandler) SalesExport(w http.ResponseWriter, r *http.Request) {
-	branchID, err := uuid.Parse(r.PathValue("id"))
+	branchID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid branch id"})
 		return

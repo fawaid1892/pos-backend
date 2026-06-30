@@ -8,8 +8,6 @@ import (
 	"testing"
 
 	"pos-multi-branch/backend/internal/model"
-
-	"github.com/google/uuid"
 )
 
 // ============================================================
@@ -30,11 +28,11 @@ func TestCheckout_Validation_EmptyBody(t *testing.T) {
 func TestCheckout_Validation_MissingBranchID(t *testing.T) {
 	h := NewTransactionHandler()
 	body, _ := json.Marshal(model.CheckoutRequest{
-		BranchID:        uuid.Nil,
+		BranchID:        0,
 		CustomerName:    "Test",
 		DiscountPercent: 0,
 		CashAmount:      50000,
-		Items:           []model.CheckoutItemReq{{ProductID: uuid.New(), Quantity: 1}},
+		Items:           []model.CheckoutItemReq{{ProductID: 1234567890123456, Quantity: 1}},
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/transactions/checkout", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -48,7 +46,7 @@ func TestCheckout_Validation_MissingBranchID(t *testing.T) {
 func TestCheckout_Validation_NoItems(t *testing.T) {
 	h := NewTransactionHandler()
 	body, _ := json.Marshal(model.CheckoutRequest{
-		BranchID:        uuid.New(),
+		BranchID:        1111111111111111,
 		CustomerName:    "Test",
 		DiscountPercent: 0,
 		CashAmount:      50000,
@@ -66,11 +64,11 @@ func TestCheckout_Validation_NoItems(t *testing.T) {
 func TestCheckout_Validation_CashAmountZero(t *testing.T) {
 	h := NewTransactionHandler()
 	body, _ := json.Marshal(model.CheckoutRequest{
-		BranchID:        uuid.New(),
+		BranchID:        1111111111111111,
 		CustomerName:    "Test",
 		DiscountPercent: 0,
 		CashAmount:      0,
-		Items:           []model.CheckoutItemReq{{ProductID: uuid.New(), Quantity: 1}},
+		Items:           []model.CheckoutItemReq{{ProductID: 1234567890123456, Quantity: 1}},
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/transactions/checkout", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -91,13 +89,13 @@ func TestCheckout_Validation_InvalidItemQuantity(t *testing.T) {
 		name  string
 		items []model.CheckoutItemReq
 	}{
-		{"zero qty", []model.CheckoutItemReq{{ProductID: uuid.New(), Quantity: 0}}},
-		{"negative qty", []model.CheckoutItemReq{{ProductID: uuid.New(), Quantity: -1}}},
+		{"zero qty", []model.CheckoutItemReq{{ProductID: 1234567890123456, Quantity: 0}}},
+		{"negative qty", []model.CheckoutItemReq{{ProductID: 1234567890123456, Quantity: -1}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			body, _ := json.Marshal(model.CheckoutRequest{
-				BranchID:        uuid.New(),
+				BranchID:        1111111111111111,
 				CustomerName:    "Test",
 				DiscountPercent: 0,
 				CashAmount:      50000,
@@ -117,7 +115,7 @@ func TestCheckout_Validation_InvalidItemQuantity(t *testing.T) {
 func TestGetTransactionByID_InvalidUUID(t *testing.T) {
 	h := NewTransactionHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/transactions/{id}", nil)
-	req.SetPathValue("id", "not-a-uuid")
+	req.SetPathValue("id", "not-a-number")
 	rr := httptest.NewRecorder()
 	h.GetByID(rr, req)
 	if rr.Code != http.StatusBadRequest {
@@ -132,12 +130,12 @@ func TestGetTransactionByID_InvalidUUID(t *testing.T) {
 func TestAdjustment_InvalidBranchID(t *testing.T) {
 	h := NewStockHandler()
 	body, _ := json.Marshal(model.StockAdjustmentRequest{
-		ProductID: uuid.New(),
+		ProductID: 1234567890123456,
 		Type:      "in",
 		Qty:       10,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/branches/{id}/inventory/adjustment", bytes.NewReader(body))
-	req.SetPathValue("id", "bad-uuid")
+	req.SetPathValue("id", "bad-number")
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	h.Adjustment(rr, req)
@@ -149,12 +147,12 @@ func TestAdjustment_InvalidBranchID(t *testing.T) {
 func TestAdjustment_InvalidType(t *testing.T) {
 	h := NewStockHandler()
 	body, _ := json.Marshal(model.StockAdjustmentRequest{
-		ProductID: uuid.New(),
+		ProductID: 1234567890123456,
 		Type:      "badtype",
 		Qty:       10,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/branches/{id}/inventory/adjustment", bytes.NewReader(body))
-	req.SetPathValue("id", uuid.New().String())
+	req.SetPathValue("id", "1111111111111111")
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	h.Adjustment(rr, req)
@@ -166,12 +164,12 @@ func TestAdjustment_InvalidType(t *testing.T) {
 func TestAdjustment_ZeroQty(t *testing.T) {
 	h := NewStockHandler()
 	body, _ := json.Marshal(model.StockAdjustmentRequest{
-		ProductID: uuid.New(),
+		ProductID: 1234567890123456,
 		Type:      "in",
 		Qty:       0,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/branches/{id}/inventory/adjustment", bytes.NewReader(body))
-	req.SetPathValue("id", uuid.New().String())
+	req.SetPathValue("id", "1111111111111111")
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	h.Adjustment(rr, req)
@@ -183,12 +181,12 @@ func TestAdjustment_ZeroQty(t *testing.T) {
 func TestAdjustment_NegativeQty(t *testing.T) {
 	h := NewStockHandler()
 	body, _ := json.Marshal(model.StockAdjustmentRequest{
-		ProductID: uuid.New(),
+		ProductID: 1234567890123456,
 		Type:      "in",
 		Qty:       -5,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/branches/{id}/inventory/adjustment", bytes.NewReader(body))
-	req.SetPathValue("id", uuid.New().String())
+	req.SetPathValue("id", "1111111111111111")
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	h.Adjustment(rr, req)
@@ -200,12 +198,12 @@ func TestAdjustment_NegativeQty(t *testing.T) {
 func TestAdjustment_MissingProductID(t *testing.T) {
 	h := NewStockHandler()
 	body, _ := json.Marshal(model.StockAdjustmentRequest{
-		ProductID: uuid.Nil,
+		ProductID: 0,
 		Type:      "in",
 		Qty:       10,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/branches/{id}/inventory/adjustment", bytes.NewReader(body))
-	req.SetPathValue("id", uuid.New().String())
+	req.SetPathValue("id", "1111111111111111")
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	h.Adjustment(rr, req)
@@ -216,11 +214,11 @@ func TestAdjustment_MissingProductID(t *testing.T) {
 
 func TestTransfer_SameBranch(t *testing.T) {
 	h := NewStockHandler()
-	id := uuid.New()
+	id := int64(1111111111111111)
 	body, _ := json.Marshal(model.StockTransferRequest{
 		SourceBranchID: id,
 		TargetBranchID: id,
-		ProductID:      uuid.New(),
+		ProductID:      1234567890123456,
 		Qty:            5,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/inventory/transfer", bytes.NewReader(body))
@@ -235,9 +233,9 @@ func TestTransfer_SameBranch(t *testing.T) {
 func TestTransfer_ZeroQty(t *testing.T) {
 	h := NewStockHandler()
 	body, _ := json.Marshal(model.StockTransferRequest{
-		SourceBranchID: uuid.New(),
-		TargetBranchID: uuid.New(),
-		ProductID:      uuid.New(),
+		SourceBranchID: 1111111111111111,
+		TargetBranchID: 2222222222222222,
+		ProductID:      1234567890123456,
 		Qty:            0,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/inventory/transfer", bytes.NewReader(body))
@@ -252,9 +250,9 @@ func TestTransfer_ZeroQty(t *testing.T) {
 func TestTransfer_MissingSource(t *testing.T) {
 	h := NewStockHandler()
 	body, _ := json.Marshal(model.StockTransferRequest{
-		SourceBranchID: uuid.Nil,
-		TargetBranchID: uuid.New(),
-		ProductID:      uuid.New(),
+		SourceBranchID: 0,
+		TargetBranchID: 2222222222222222,
+		ProductID:      1234567890123456,
 		Qty:            5,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/inventory/transfer", bytes.NewReader(body))
@@ -295,7 +293,7 @@ func TestSalesReport_InvalidBranchID(t *testing.T) {
 func TestSalesReport_InvalidStartDate(t *testing.T) {
 	h := NewReportHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/branches/{id}/reports/sales?start=notadate", nil)
-	req.SetPathValue("id", uuid.New().String())
+	req.SetPathValue("id", "1111111111111111")
 	rr := httptest.NewRecorder()
 	h.Sales(rr, req)
 	if rr.Code != http.StatusBadRequest {
@@ -328,7 +326,7 @@ func TestProfitLoss_InvalidBranchID(t *testing.T) {
 func TestProfitLoss_InvalidDate(t *testing.T) {
 	h := NewReportHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/branches/{id}/reports/profit-loss?start=bad", nil)
-	req.SetPathValue("id", uuid.New().String())
+	req.SetPathValue("id", "1111111111111111")
 	rr := httptest.NewRecorder()
 	h.ProfitLoss(rr, req)
 	if rr.Code != http.StatusBadRequest {
@@ -354,7 +352,7 @@ func TestCreateProduct_EmptyBody(t *testing.T) {
 func TestCreateProduct_MissingName(t *testing.T) {
 	h := NewProductHandler()
 	body, _ := json.Marshal(model.CreateProductRequest{
-		CategoryID: uuid.New(),
+		CategoryID: 1234567890123456,
 		Name:       "",
 		Barcode:    "12345",
 		Price:      10000,
@@ -372,7 +370,7 @@ func TestCreateProduct_MissingName(t *testing.T) {
 func TestCreateProduct_MissingBarcode(t *testing.T) {
 	h := NewProductHandler()
 	body, _ := json.Marshal(model.CreateProductRequest{
-		CategoryID: uuid.New(),
+		CategoryID: 1234567890123456,
 		Name:       "Test",
 		Barcode:    "",
 		Price:      10000,
@@ -461,7 +459,7 @@ func TestSalesExport_InvalidBranchID(t *testing.T) {
 func TestSalesExport_InvalidDate(t *testing.T) {
 	h := NewExportHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/branches/{id}/reports/sales/export?start=bad", nil)
-	req.SetPathValue("id", uuid.New().String())
+	req.SetPathValue("id", "1111111111111111")
 	rr := httptest.NewRecorder()
 	h.SalesExport(rr, req)
 	if rr.Code != http.StatusBadRequest {
