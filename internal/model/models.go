@@ -57,36 +57,42 @@ type MeResponse struct {
 
 // ─── Branch ───
 type Branch struct {
-	ID        uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
-	Name      string         `json:"name" gorm:"not null;size:200"`
-	Code      string         `json:"code" gorm:"uniqueIndex;size:50;not null;default:''"`
-	Address   string         `json:"address" gorm:"size:500;default:''"`
-	Phone     string         `json:"phone" gorm:"size:30;default:''"`
-	Province  string         `json:"province" gorm:"size:100;not null;default:''"`
-	City      string         `json:"city" gorm:"size:100;not null;default:''"`
-	TaxRate   float64        `json:"tax_rate" gorm:"default:0"`
-	IsActive  bool           `json:"is_active" gorm:"default:false"`
-	CreatedAt time.Time      `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
-	DeletedAt gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
+	ID           uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	Name         string         `json:"name" gorm:"not null;size:200"`
+	Code         string         `json:"code" gorm:"uniqueIndex;size:50;not null;default:''"`
+	Address      string         `json:"address" gorm:"size:500;default:''"`
+	Phone        string         `json:"phone" gorm:"size:30;default:''"`
+	Province     string         `json:"province" gorm:"size:100;not null;default:''"`
+	ProvinceCode string         `json:"province_code" gorm:"size:10;not null;default:''"`
+	City         string         `json:"city" gorm:"size:100;not null;default:''"`
+	CityCode     string         `json:"city_code" gorm:"size:10;not null;default:''"`
+	TaxRate      float64        `json:"tax_rate" gorm:"default:0"`
+	IsActive     bool           `json:"is_active" gorm:"default:false"`
+	CreatedAt    time.Time      `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt    time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
+	DeletedAt    gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
 }
 
 type CreateBranchRequest struct {
-	Name     string `json:"name"`
-	Code     string `json:"code"`
-	Address  string `json:"address"`
-	Phone    string `json:"phone"`
-	Province string `json:"province"`
-	City     string `json:"city"`
+	Name         string `json:"name"`
+	Code         string `json:"code"`
+	Address      string `json:"address"`
+	Phone        string `json:"phone"`
+	Province     string `json:"province"`
+	ProvinceCode string `json:"province_code"`
+	City         string `json:"city"`
+	CityCode     string `json:"city_code"`
 }
 
 type UpdateBranchRequest struct {
-	Name     string `json:"name"`
-	Code     string `json:"code"`
-	Address  string `json:"address"`
-	Phone    string `json:"phone"`
-	Province string `json:"province"`
-	City     string `json:"city"`
+	Name         string `json:"name"`
+	Code         string `json:"code"`
+	Address      string `json:"address"`
+	Phone        string `json:"phone"`
+	Province     string `json:"province"`
+	ProvinceCode string `json:"province_code"`
+	City         string `json:"city"`
+	CityCode     string `json:"city_code"`
 }
 
 // ─── Category ───

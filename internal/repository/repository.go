@@ -67,12 +67,14 @@ func GetBranchByID(id uuid.UUID) (*model.Branch, error) {
 
 func CreateBranch(req model.CreateBranchRequest) (*model.Branch, error) {
 	b := &model.Branch{
-		Name:     req.Name,
-		Code:     req.Code,
-		Address:  req.Address,
-		Phone:    req.Phone,
-		Province: req.Province,
-		City:     req.City,
+		Name:         req.Name,
+		Code:         req.Code,
+		Address:      req.Address,
+		Phone:        req.Phone,
+		Province:     req.Province,
+		ProvinceCode: req.ProvinceCode,
+		City:         req.City,
+		CityCode:     req.CityCode,
 	}
 	err := database.DB.Create(b).Error
 	if err != nil {
@@ -84,12 +86,14 @@ func CreateBranch(req model.CreateBranchRequest) (*model.Branch, error) {
 func UpdateBranch(id uuid.UUID, req model.UpdateBranchRequest) (*model.Branch, error) {
 	b := &model.Branch{}
 	err := database.DB.Model(b).Where("id = ? AND deleted_at IS NULL", id).Updates(map[string]interface{}{
-		"name":     req.Name,
-		"code":     req.Code,
-		"address":  req.Address,
-		"phone":    req.Phone,
-		"province": req.Province,
-		"city":     req.City,
+		"name":          req.Name,
+		"code":          req.Code,
+		"address":       req.Address,
+		"phone":         req.Phone,
+		"province":      req.Province,
+		"province_code": req.ProvinceCode,
+		"city":          req.City,
+		"city_code":     req.CityCode,
 	}).First(b).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

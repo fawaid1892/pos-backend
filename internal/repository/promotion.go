@@ -62,8 +62,8 @@ func ListPromotions(p ListPromotionsParams) ([]model.Promotion, error) {
 			 (scope = 'selected' AND EXISTS (
 			   SELECT 1 FROM promotion_branches pb WHERE pb.promotion_id = promotions.id AND pb.branch_id = ?
 			 )) OR
-			 (scope = 'province' AND province_id = (SELECT province FROM branches WHERE id = ?)) OR
-			 (scope = 'city' AND city_id = (SELECT city FROM branches WHERE id = ?))`,
+			 (scope = 'province' AND province_id = (SELECT province_code FROM branches WHERE id = ?)) OR
+			 (scope = 'city' AND city_id = (SELECT city_code FROM branches WHERE id = ?))`,
 			branchID, branchID, branchID,
 		)
 	}
@@ -291,8 +291,8 @@ func ListPromotionsByBranch(branchID uuid.UUID) ([]model.Promotion, error) {
 			 (scope = 'selected' AND EXISTS (
 			   SELECT 1 FROM promotion_branches pb WHERE pb.promotion_id = promotions.id AND pb.branch_id = ?
 			 )) OR
-			 (scope = 'province' AND province_id = (SELECT province FROM branches WHERE id = ?)) OR
-			 (scope = 'city' AND city_id = (SELECT city FROM branches WHERE id = ?))`,
+			 (scope = 'province' AND province_id = (SELECT province_code FROM branches WHERE id = ?)) OR
+			 (scope = 'city' AND city_id = (SELECT city_code FROM branches WHERE id = ?))`,
 			branchID, branchID, branchID,
 		).
 		Order("created_at DESC").
@@ -371,13 +371,13 @@ func promotionAppliesToBranch(promotionID uuid.UUID, branchID uuid.UUID) (bool, 
 		if err := database.DB.Where("id = ?", branchID).First(&branch).Error; err != nil {
 			return false, err
 		}
-		return branch.Province == promo.ProvinceID, nil
+		return branch.ProvinceCode == promo.ProvinceID, nil
 	case "city":
 		var branch model.Branch
 		if err := database.DB.Where("id = ?", branchID).First(&branch).Error; err != nil {
 			return false, err
 		}
-		return branch.City == promo.CityID, nil
+		return branch.CityCode == promo.CityID, nil
 	default:
 		return false, nil
 	}
