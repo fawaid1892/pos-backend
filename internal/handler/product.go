@@ -93,6 +93,16 @@ func (h *ProductHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Auto-generate barcode if empty: PRD-{SKU}
+	if req.Barcode == nil || *req.Barcode == "" {
+		sku := ""
+		if req.Code != nil {
+			sku = *req.Code
+		}
+		generated := "PRD-" + sku
+		req.Barcode = &generated
+	}
+
 	// Bug A: Check barcode duplicate (skip if empty)
 	if req.Barcode != nil && *req.Barcode != "" {
 		barcodeExists, err := repository.CheckBarcodeExists(*req.Barcode)

@@ -92,22 +92,26 @@ func Seed() error {
 
 	// Create branches
 	branchPusat := model.Branch{
-		Name:     "Cabang Pusat",
-		Code:     "PST",
-		Address:  "Jl. Merdeka No.1, Jakarta",
-		Phone:    "021-1234567",
-		Province: "DKI Jakarta",
-		City:     "Jakarta Pusat",
-		IsActive: true,
+		Name:         "Cabang Pusat",
+		Code:         "PST",
+		Address:      "Jl. Merdeka No.1, Jakarta",
+		Phone:        "021-1234567",
+		Province:     "DKI Jakarta",
+		City:         "Jakarta Pusat",
+		ProvinceCode: "31",
+		CityCode:     "3171",
+		IsActive:     true,
 	}
 	branchCibubur := model.Branch{
-		Name:     "Cabang Cibubur",
-		Code:     "CBG-01",
-		Address:  "Jl. Cibubur Raya No.5, Bekasi",
-		Phone:    "021-7654321",
-		Province: "Jawa Barat",
-		City:     "Bekasi",
-		IsActive: true,
+		Name:         "Cabang Cibubur",
+		Code:         "CBG-01",
+		Address:      "Jl. Cibubur Raya No.5, Bekasi",
+		Phone:        "021-7654321",
+		Province:     "Jawa Barat",
+		City:         "Bekasi",
+		ProvinceCode: "32",
+		CityCode:     "3275",
+		IsActive:     true,
 	}
 	if err := DB.Create(&branchPusat).Error; err != nil {
 		return fmt.Errorf("seed branch pusat: %w", err)
