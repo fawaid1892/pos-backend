@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"pos-multi-branch/backend/internal/middleware"
 	"pos-multi-branch/backend/internal/model"
 	"pos-multi-branch/backend/internal/repository"
 	"pos-multi-branch/backend/internal/ws"
